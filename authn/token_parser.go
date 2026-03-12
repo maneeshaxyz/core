@@ -17,11 +17,13 @@ import (
 type tokenClaims struct {
 	jwt.RegisteredClaims
 	ClientID string `json:"client_id"`
+	Email    string `json:"email"`
 	OUHandle string `json:"ouHandle"`
 }
 
 type ExtractedClaims struct {
-	TraderID string `json:"traderID"`
+	UserID   string `json:"userId"`
+	Email    string `json:"email"`
 	OUHandle string `json:"ouHandle"`
 }
 
@@ -149,8 +151,8 @@ func (te *TokenExtractor) ExtractClaimsFromHeader(authHeader string) (*Extracted
 		return nil, fmt.Errorf("jwt missing exp claim")
 	}
 
-	traderID := strings.TrimSpace(claims.Subject)
-	if len(traderID) == 0 {
+	userID := strings.TrimSpace(claims.Subject)
+	if len(userID) == 0 {
 		return nil, fmt.Errorf("jwt missing sub claim")
 	}
 
@@ -162,7 +164,8 @@ func (te *TokenExtractor) ExtractClaimsFromHeader(authHeader string) (*Extracted
 	}
 
 	return &ExtractedClaims{
-		TraderID: traderID,
+		UserID:   userID,
+		Email:    strings.TrimSpace(claims.Email),
 		OUHandle: strings.TrimSpace(claims.OUHandle),
 	}, nil
 }
