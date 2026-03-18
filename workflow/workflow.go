@@ -15,21 +15,21 @@ func GraphInterpreterWorkflow(ctx workflow.Context, def WorkflowDefinition, init
 		Status:            StatusRunning,
 		WorkflowVariables: initialWorkflowVariables,
 		AuditTrail:        make([]string, 0),
-		EdgeTokens:        make(map[string]int),
 	}
+	edgeTokens := make(map[string]int)
 
 	// Setup Query handler
 	workflow.SetQueryHandler(ctx, "GetStatus", func() (*WorkflowInstance, error) {
 		return instance, nil
 	})
 
-	// Setup Signal listener for background audit trail updates
+	// Setup Signal listener for background event updates
 	signalChan := workflow.GetSignalChannel(ctx, "TaskUpdateSignal")
 	workflow.Go(ctx, func(ctx workflow.Context) {
 		for {
-			var msg string
-			signalChan.Receive(ctx, &msg)
-			instance.AuditTrail = append(instance.AuditTrail, msg)
+			var updateEvent UpdateEvent
+			signalChan.Receive(ctx, &updateEvent)
+			// TODO: implement event handling
 		}
 	})
 
@@ -70,7 +70,7 @@ func GraphInterpreterWorkflow(ctx workflow.Context, def WorkflowDefinition, init
 
 	// Places a token on an edge and then proceeds to the target node
 	transitionTo := func(ctx workflow.Context, edge Edge) error {
-		instance.EdgeTokens[edge.ID]++
+		edgeTokens[edge.ID]++
 		return executeNode(ctx, edge.TargetID)
 	}
 
@@ -100,7 +100,7 @@ func GraphInterpreterWorkflow(ctx workflow.Context, def WorkflowDefinition, init
 			nodeCtx := workflow.WithActivityOptions(ctx, nodeActOpts)
 
 			// 2. Use nodeCtx instead of the generic ctx
-			err := workflow.ExecuteActivity(nodeCtx, "ExecuteTaskActivity", node.TaskID, instance.WorkflowVariables).Get(ctx, &result)
+			err := workflow.ExecuteActivity(nodeCtx, "ExecuteTaskActivity", node.TaskTemplateID, instance.WorkflowVariables).Get(ctx, &result)
 			if err != nil {
 				return err
 			}
@@ -167,14 +167,14 @@ func GraphInterpreterWorkflow(ctx workflow.Context, def WorkflowDefinition, init
 
 				// 1. Check if ALL incoming edges have a token
 				for _, e := range inEdges {
-					if instance.EdgeTokens[e.ID] <= 0 {
+					if edgeTokens[e.ID] <= 0 {
 						return nil // End coroutine. Another branch arriving later will continue.
 					}
 				}
 
 				// 2. Consume all tokens safely
 				for _, e := range inEdges {
-					instance.EdgeTokens[e.ID]--
+					edgeTokens[e.ID]--
 				}
 
 				// 3. Proceed
@@ -188,8 +188,8 @@ func GraphInterpreterWorkflow(ctx workflow.Context, def WorkflowDefinition, init
 
 				// Consume ONLY the token that brought us here
 				for _, e := range inEdges {
-					if instance.EdgeTokens[e.ID] > 0 {
-						instance.EdgeTokens[e.ID]--
+					if edgeTokens[e.ID] > 0 {
+						edgeTokens[e.ID]--
 						break
 					}
 				}

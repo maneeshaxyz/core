@@ -7,22 +7,23 @@ import (
 )
 
 type EngineActivities struct {
-	Manager Manager
+	ExecuteTaskActivityHandler       func(TaskPayload) error
+	WorkflowCompletedActivityHandler func(string, map[string]any) error
 }
 
 // ExecuteTaskActivity pushes the task to your application and sleeps waiting for it
-func (a *EngineActivities) ExecuteTaskActivity(ctx context.Context, taskID string, inputs map[string]any) (map[string]any, error) {
+func (a *EngineActivities) ExecuteTaskActivity(ctx context.Context, taskTemplateID string, inputs map[string]any) (map[string]any, error) {
 	info := activity.GetInfo(ctx)
 	payload := TaskPayload{
-		WorkflowID: info.WorkflowExecution.ID,
-		RunID:      info.WorkflowExecution.RunID,
-		NodeID:     info.ActivityID, // this is Node.ID which was passed in workflow.WithActivityOptions(ctx, nodeActOpts)
-		TaskID:     taskID,
-		Inputs:     inputs,
+		WorkflowID:     info.WorkflowExecution.ID,
+		RunID:          info.WorkflowExecution.RunID,
+		NodeID:         info.ActivityID, // this is Node.ID which was passed in workflow.WithActivityOptions(ctx, nodeActOpts)
+		TaskTemplateID: taskTemplateID,
+		Inputs:         inputs,
 	}
 
 	// Trigger custom code block
-	err := a.Manager.GetTaskActivationHandler()(payload)
+	err := a.ExecuteTaskActivityHandler(payload)
 	if err != nil {
 		return nil, err
 	}
@@ -32,5 +33,5 @@ func (a *EngineActivities) ExecuteTaskActivity(ctx context.Context, taskID strin
 }
 
 func (a *EngineActivities) WorkflowCompletedActivity(ctx context.Context, workflowID string, finalContext map[string]any) error {
-	return a.Manager.GetWorkflowCompletionHandler()(workflowID, finalContext)
+	return a.WorkflowCompletedActivityHandler(workflowID, finalContext)
 }

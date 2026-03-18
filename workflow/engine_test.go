@@ -29,14 +29,14 @@ const customsWorkflowJSON = `
   ],
   "nodes":[
     { "id": "customs_0_start", "type": "START" },
-    { "id": "customs_1_cusdec_submit", "type": "TASK", "task_id": "SUBMIT_CUSDEC", "output_mapping": { "consignment_type": "consignment_type" } },
-    { "id": "customs_2_duty_payment", "type": "TASK", "task_id": "PAY_DUTIES" },
+    { "id": "customs_1_cusdec_submit", "type": "TASK", "task_template_id": "SUBMIT_CUSDEC", "output_mapping": { "consignment_type": "consignment_type" } },
+    { "id": "customs_2_duty_payment", "type": "TASK", "task_template_id": "PAY_DUTIES" },
     { "id": "customs_3_warranting_gw", "type": "GATEWAY", "gateway_type": "EXCLUSIVE_SPLIT" },
-    { "id": "customs_4_lcl_cdn_create", "type": "TASK", "task_id": "CREATE_LCL_CDN" },
-    { "id": "customs_4_fcl_cdn_create", "type": "TASK", "task_id": "CREATE_FCL_CDN" },
-    { "id": "customs_5_cdn_ack", "type": "TASK", "task_id": "ACK_CDNS" },
-    { "id": "customs_6_boatnote_create", "type": "TASK", "task_id": "CREATE_BOAT_NOTE" },
-    { "id": "customs_6_boatnote_approve", "type": "TASK", "task_id": "APPROVE_BOAT_NOTE" },
+    { "id": "customs_4_lcl_cdn_create", "type": "TASK", "task_template_id": "CREATE_LCL_CDN" },
+    { "id": "customs_4_fcl_cdn_create", "type": "TASK", "task_template_id": "CREATE_FCL_CDN" },
+    { "id": "customs_5_cdn_ack", "type": "TASK", "task_template_id": "ACK_CDNS" },
+    { "id": "customs_6_boatnote_create", "type": "TASK", "task_template_id": "CREATE_BOAT_NOTE" },
+    { "id": "customs_6_boatnote_approve", "type": "TASK", "task_template_id": "APPROVE_BOAT_NOTE" },
     { "id": "customs_7_export_released", "type": "END" }
   ]
 }`
@@ -58,10 +58,10 @@ const parallelWorkflowJSON = `
   "nodes":[
     { "id": "start", "type": "START" },
     { "id": "split", "type": "GATEWAY", "gateway_type": "PARALLEL_SPLIT" },
-    { "id": "task_a", "type": "TASK", "task_id": "TASK_A" },
-    { "id": "task_b", "type": "TASK", "task_id": "TASK_B" },
+    { "id": "task_a", "type": "TASK", "task_template_id": "TASK_A" },
+    { "id": "task_b", "type": "TASK", "task_template_id": "TASK_B" },
     { "id": "join", "type": "GATEWAY", "gateway_type": "PARALLEL_JOIN" },
-    { "id": "task_c", "type": "TASK", "task_id": "TASK_C" },
+    { "id": "task_c", "type": "TASK", "task_template_id": "TASK_C" },
     { "id": "end", "type": "END" }
   ]
 }`
@@ -157,10 +157,6 @@ func TestParallelJoinFlow(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Equal(t, StatusCompleted, instance.Status)
-
-	// Ensure that all tokens were successfully consumed and cleaned up at the Join
-	require.Equal(t, 0, instance.EdgeTokens["e4"])
-	require.Equal(t, 0, instance.EdgeTokens["e5"])
 
 	env.AssertExpectations(t)
 }
