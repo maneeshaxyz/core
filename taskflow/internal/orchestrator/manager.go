@@ -30,21 +30,23 @@ func NewTaskManager(db *store.TaskDB, layer1 engine.TemporalManager, layer2 engi
 // StartTask handles an incoming task request from the workflow engine (Layer 1).
 // It starts a Layer 2 workflow based on task.json.
 func (tm *TaskManager) StartTask(payload engine.TaskPayload) error {
-	taskID := payload.NodeID // using NodeID as unique identifier for this run
-	layer2WorkflowID := fmt.Sprintf("task-layer2-%s-%s", payload.WorkflowID, payload.NodeID)
+	// Use a unique ID for this specific task instance (WorkflowID + NodeID)
+	taskID := fmt.Sprintf("%s:%s", payload.WorkflowID, payload.NodeID)
+	childWorkflowID := fmt.Sprintf("task-layer2-%s-%s", payload.WorkflowID, payload.NodeID)
 
-	// 1. Write task information to DB
+	// 1. Write the base "Application" record to DB
 	record := store.TaskRecord{
-		WorkflowID:       payload.WorkflowID,
+		ParentWorkflowID: payload.WorkflowID,
 		RunID:            payload.RunID,
 		NodeID:           payload.NodeID,
 		TaskTemplateID:   payload.TaskTemplateID,
-		Layer2WorkflowID: layer2WorkflowID,
-		Status:           "PENDING_L2",
+		ChildWorkflowID:  childWorkflowID,
+		IsCompleted:      false,
 		CreatedAt:        time.Now(),
+		Inputs:           make(map[string]any),
 	}
 	tm.db.SaveTask(taskID, record)
-	log.Printf("[TaskManager] Persisted new task to DB. TaskID: %s, L2 Workflow: %s", taskID, layer2WorkflowID)
+	log.Printf("[TaskManager] Created Master Application Task: %s", taskID)
 
 	// 2. Load task.json
 	fileBytes, err := os.ReadFile("task.json")
@@ -58,29 +60,22 @@ func (tm *TaskManager) StartTask(payload engine.TaskPayload) error {
 	}
 
 	// 3. Start Layer 2 Workflow
-	log.Printf("[TaskManager] starting layer 2 workflow with payload %v", payload)
-
-	initialVars := map[string]any{
-		"applicant_name":    "",
-		"justification":     "",
-		"reviewer_comments": "",
-		"review_outcome":    "",
-	}
-
-	err = tm.layer2Manager.StartWorkflow(context.Background(), layer2WorkflowID, def, initialVars)
+	log.Printf("[TaskManager] starting child workflow with payload %v", payload)
+	
+	err = tm.layer2Manager.StartWorkflow(context.Background(), childWorkflowID, def, map[string]any{})
 	if err != nil {
-		return fmt.Errorf("failed to start layer 2 workflow: %v", err)
+		return fmt.Errorf("failed to start child workflow: %v", err)
 	}
 
-	log.Printf("[TaskManager] Successfully started Layer 2 workflow: %s", layer2WorkflowID)
+	log.Printf("[TaskManager] Successfully started Child workflow: %s", childWorkflowID)
 
 	return nil
 }
 
 // HandleLayer2Completion is called when ANY workflow completes.
-// We check if it's a Layer 2 workflow, and if so, complete the corresponding Layer 1 task.
+// We check if it's a child workflow we launched, and if so, complete the corresponding parent task.
 func (tm *TaskManager) HandleLayer2Completion(workflowID string, finalVariables map[string]any) error {
-	record, exists := tm.db.GetTaskByLayer2WorkflowID(workflowID)
+	record, exists := tm.db.GetTaskByChildWorkflowID(workflowID)
 	if !exists {
 		// Not a layer 2 workflow we launched, or DB lost it. Safe to ignore.
 		return nil
@@ -89,37 +84,54 @@ func (tm *TaskManager) HandleLayer2Completion(workflowID string, finalVariables 
 	log.Printf("[TaskManager] Detected completion of Layer 2 workflow %s for Task %s", workflowID, record.NodeID)
 
 	// Update DB status and store the final outcome
-	record.Status = "COMPLETED"
+	record.IsCompleted = true
 	record.Inputs = finalVariables
 	tm.db.SaveTask(record.NodeID, record)
 
-	// Complete the Layer 1 task in Temporal
-	err := tm.layer1Manager.TaskDone(context.Background(), record.WorkflowID, record.RunID, record.NodeID, finalVariables)
+	// Complete the parent task in Temporal
+	err := tm.layer1Manager.TaskDone(context.Background(), record.ParentWorkflowID, record.RunID, record.NodeID, finalVariables)
 	if err != nil {
-		log.Printf("[TaskManager] Failed to complete Layer 1 task in Temporal: %v", err)
+		log.Printf("[TaskManager] Failed to complete parent task in Temporal: %v", err)
 		return err
 	}
 
-	log.Printf("[TaskManager] Task %s marked as done in Layer 1!", record.NodeID)
+	log.Printf("[TaskManager] Task %s marked as done in Parent Graph!", record.NodeID)
 	return nil
 }
 
-// StartLayer3Task persists a Layer 3 subtask and waits for frontend interaction.
-func (tm *TaskManager) StartLayer3Task(payload engine.TaskPayload) error {
-	taskID := payload.NodeID
-
-	record := store.TaskRecord{
-		WorkflowID:     payload.WorkflowID,
-		RunID:          payload.RunID,
-		NodeID:         payload.NodeID,
-		TaskTemplateID: payload.TaskTemplateID,
-		Status:         "PENDING_L3",
-		Inputs:         payload.Inputs,
-		CreatedAt:      time.Now(),
+// StartSubTask updates the existing master record with the current step's details.
+func (tm *TaskManager) StartSubTask(payload engine.TaskPayload) error {
+	// Find the master application record associated with this Child Workflow
+	record, exists := tm.db.GetTaskByChildWorkflowID(payload.WorkflowID)
+	if !exists {
+		return fmt.Errorf("no master task found for child workflow %s", payload.WorkflowID)
 	}
-	tm.db.SaveTask(taskID, record)
-	log.Printf("[TaskManager] Persisted Layer 3 task to DB. TaskID: %s", taskID)
 
+	// Update the existing record with the new node's template and merged inputs
+	record.TaskTemplateID = payload.TaskTemplateID
+	
+	// Merge inputs provided by the engine (e.g. from previous nodes)
+	if record.Inputs == nil {
+		record.Inputs = make(map[string]any)
+	}
+	for k, v := range payload.Inputs {
+		record.Inputs[k] = v
+	}
+
+	// Important: We use the master task's ID (ParentWorkflowID:NodeID) for persistence
+	masterTaskID := fmt.Sprintf("%s:%s", record.ParentWorkflowID, record.NodeID)
+	
+	// SIMULATION: If this is the Reviewer Step, simulate an OUTBOUND API CALL
+	if payload.TaskTemplateID == "reviewer_submission_form" {
+		log.Printf("[TaskManager] >>> INTEGRATION: Pushing task %s to EXTERNAL Reviewer System via API...", masterTaskID)
+		record.IntegrationStatus = "QUEUED_EXTERNALLY"
+	} else {
+		record.IntegrationStatus = ""
+	}
+
+	tm.db.SaveTask(masterTaskID, record)
+	
+	log.Printf("[TaskManager] Updated Master Task %s to Step: %s", masterTaskID, payload.TaskTemplateID)
 	return nil
 }
 

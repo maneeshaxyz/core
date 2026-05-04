@@ -12,12 +12,13 @@ const dbFilePath = "/tmp/nsw_task_db.json"
 
 // TaskRecord represents a task stored in the DB
 type TaskRecord struct {
-	WorkflowID       string         `json:"workflow_id"`
+	ParentWorkflowID string         `json:"parent_workflow_id"`
 	RunID            string         `json:"run_id"`
 	NodeID           string         `json:"node_id"`
 	TaskTemplateID   string         `json:"task_template_id"`
-	Layer2WorkflowID string         `json:"layer2_workflow_id"`
-	Status           string         `json:"status"`
+	ChildWorkflowID  string         `json:"child_workflow_id"`
+	IsCompleted      bool           `json:"is_completed"`
+	IntegrationStatus string        `json:"integration_status"` // e.g. "QUEUED_EXTERNALLY"
 	Inputs           map[string]any `json:"inputs"`
 	CreatedAt        time.Time      `json:"created_at"`
 }
@@ -73,11 +74,11 @@ func (db *TaskDB) GetTask(taskID string) (TaskRecord, bool) {
 	return record, exists
 }
 
-func (db *TaskDB) GetTaskByLayer2WorkflowID(layer2WorkflowID string) (TaskRecord, bool) {
+func (db *TaskDB) GetTaskByChildWorkflowID(childWorkflowID string) (TaskRecord, bool) {
 	db.mu.RLock()
 	defer db.mu.RUnlock()
 	for _, record := range db.tasks {
-		if record.Layer2WorkflowID == layer2WorkflowID {
+		if record.ChildWorkflowID == childWorkflowID {
 			return record, true
 		}
 	}

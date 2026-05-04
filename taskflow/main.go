@@ -52,7 +52,7 @@ func main() {
 	layer2TaskHandler := func(payload engine.TaskPayload) error {
 		log.Printf("\n[Layer 2 Engine] Task Activated! NodeID: %s, Template: %s\n", payload.NodeID, payload.TaskTemplateID)
 		if tm != nil {
-			return tm.StartLayer3Task(payload)
+			return tm.StartSubTask(payload)
 		}
 		return nil
 	}

@@ -330,11 +330,11 @@
                 const response = await fetch('/api/tasks');
                 const tasks = await response.json();
                 
-                // Pending L3 tasks for the portals
-                const pendingTasks = tasks.filter(t => t.status === 'PENDING_L3');
+                // Active tasks are anything not yet marked as completed by the graph END node
+                const pendingTasks = tasks.filter(t => !t.is_completed);
                 
-                // Completed L2 workflows for the history section
-                const completedL2 = tasks.filter(t => t.status === 'COMPLETED' && t.task_template_id === 'application_form_task');
+                // Completed tasks are moved to the history list
+                const completedL2 = tasks.filter(t => t.is_completed);
                 
                 const userTasks = pendingTasks.filter(t => t.task_template_id === 'user_submission_form');
                 const reviewerTasks = pendingTasks.filter(t => t.task_template_id === 'reviewer_submission_form');
@@ -384,7 +384,7 @@
                     </summary>
                     <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
                         <div class="task-meta">
-                            <span><strong>Workflow ID:</strong> ${task.workflow_id}</span>
+                            <span><strong>Workflow ID:</strong> ${task.parent_workflow_id}</span>
                             <span><strong>Completed On:</strong> ${new Date(task.created_at).toLocaleString()}</span>
                         </div>
                         <div style="margin-top: 1rem; padding: 10px; background: rgba(255,255,255,0.03); border-radius: 6px;">
@@ -470,14 +470,19 @@
                 formHtml = `<div class="form-group"><p>Unknown task type</p></div>`;
             }
 
+            let integrationBadge = '';
+            if (task.integration_status === 'QUEUED_EXTERNALLY') {
+                integrationBadge = `<span style="font-size: 0.6rem; color: #00ffff; background: rgba(0,255,255,0.1); padding: 2px 6px; border-radius: 4px; border: 1px solid #00ffff; margin-left: 8px; vertical-align: middle;">📥 RECEIVED VIA API</span>`;
+            }
+
             card.innerHTML = `
                 <div class="task-header">
-                    <h3 class="task-title">${templateName}</h3>
-                    <span class="task-badge">Pending</span>
+                    <h3 class="task-title">${templateName} ${integrationBadge}</h3>
+                    <span class="task-badge">Active</span>
                 </div>
                 <div class="task-meta">
-                    <span><strong>Workflow:</strong> ${task.workflow_id}</span>
-                    <span><strong>Node:</strong> ${task.node_id.split(':')[0]}</span>
+                    <span><strong>Workflow:</strong> ${task.parent_workflow_id}</span>
+                    <span><strong>Node:</strong> ${task.node_id}</span>
                 </div>
                 ${formHtml}
                 <button onclick="submitTask('${task.node_id}', '${task.task_template_id}')">Submit Task</button>

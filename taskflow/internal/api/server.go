@@ -97,8 +97,8 @@ func (s *Server) handleSubmitTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if record.Status == "COMPLETED" {
-		http.Error(w, "Task already completed", http.StatusBadRequest)
+	if record.IsCompleted {
+		http.Error(w, "Task already completed", http.StatusConflict)
 		return
 	}
 
@@ -111,13 +111,13 @@ func (s *Server) handleSubmitTask(w http.ResponseWriter, r *http.Request) {
 		finalOutput[k] = v
 	}
 
-	// Update DB with the merged data and mark completed
+	// Update DB with the merged data but DO NOT mark as completed yet.
+	// The Graph Engine (Child Workflow) will trigger completion when it hits END.
 	record.Inputs = finalOutput
-	record.Status = "COMPLETED"
 	db.SaveTask(req.TaskID, record)
 
-	// Complete the Layer 3 task in Temporal using layer2Manager
-	err := s.manager.GetLayer2Manager().TaskDone(context.Background(), record.WorkflowID, record.RunID, record.NodeID, finalOutput)
+	// Complete the parent task in Temporal using layer2Manager
+	err := s.manager.GetLayer2Manager().TaskDone(context.Background(), record.ParentWorkflowID, record.RunID, record.NodeID, finalOutput)
 	if err != nil {
 		log.Printf("[API] Temporal completion failed: %v", err)
 		http.Error(w, "Temporal completion failed", http.StatusInternalServerError)
