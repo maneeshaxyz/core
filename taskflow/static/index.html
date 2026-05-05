@@ -1,565 +1,808 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NSW Task Portal</title>
+    <title>NSW Phyto Permit Portal</title>
+    <meta name="description" content="National Single Window – Phytosanitary Permit Application Portal">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
-            --bg-color: #0f1115;
-            --surface-color: #1a1d24;
-            --surface-hover: #22262f;
-            --primary-color: #3b82f6;
-            --primary-hover: #2563eb;
-            --text-main: #f3f4f6;
-            --text-muted: #9ca3af;
-            --border-color: #2e323b;
-            --success: #10b981;
-            --danger: #ef4444;
-            --warning: #f59e0b;
+            --bg: #0d1117;
+            --surface: #161b22;
+            --surface2: #21262d;
+            --border: #30363d;
+            --primary: #388bfd;
+            --primary-hover: #58a6ff;
+            --text: #e6edf3;
+            --muted: #8b949e;
+            --success: #3fb950;
+            --danger: #f85149;
+            --warning: #d29922;
+            --cyan: #39d0d8;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
         }
 
         body {
-            margin: 0;
-            padding: 0;
             font-family: 'Inter', sans-serif;
-            background-color: var(--bg-color);
-            color: var(--text-main);
+            background: var(--bg);
+            color: var(--text);
             min-height: 100vh;
             display: flex;
             flex-direction: column;
         }
 
         header {
-            background-color: var(--surface-color);
-            border-bottom: 1px solid var(--border-color);
-            padding: 1.5rem 2rem;
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+            padding: 1rem 2rem;
             display: flex;
             align-items: center;
             justify-content: space-between;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .logo-badge {
+            background: linear-gradient(135deg, #388bfd, #9f7aea);
+            border-radius: 8px;
+            padding: 6px 10px;
+            font-weight: 700;
+            font-size: 0.85rem;
+            letter-spacing: 0.05em;
         }
 
         h1 {
-            margin: 0;
-            font-size: 1.5rem;
+            font-size: 1.1rem;
             font-weight: 600;
-            letter-spacing: -0.025em;
-            background: linear-gradient(to right, #60a5fa, #a78bfa);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
         }
 
-        .container {
-            max-width: 1000px;
-            margin: 0 auto;
-            padding: 2rem;
-            flex-grow: 1;
-            width: 100%;
-            box-sizing: border-box;
+        .header-sub {
+            font-size: 0.8rem;
+            color: var(--muted);
         }
 
-        .portal-layout {
+        .launch-bar {
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+            padding: 1rem 2rem;
             display: flex;
-            gap: 2rem;
-            margin-top: 2rem;
-            height: calc(100vh - 150px);
+            align-items: center;
+            gap: 1rem;
+            flex-wrap: wrap;
         }
 
-        .portal-column {
+        .launch-bar label {
+            font-size: 0.85rem;
+            color: var(--muted);
+            white-space: nowrap;
+        }
+
+        .launch-bar input {
+            flex: 1;
+            min-width: 200px;
+            max-width: 320px;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 0.5rem 0.75rem;
+            color: var(--text);
+            font-family: inherit;
+            font-size: 0.9rem;
+        }
+
+        .launch-bar input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(56, 139, 253, .15);
+        }
+
+        .btn {
+            border: none;
+            border-radius: 6px;
+            padding: 0.55rem 1.1rem;
+            font-weight: 600;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all .15s;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: #fff;
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-hover);
+        }
+
+        .btn-ghost {
+            background: var(--surface2);
+            color: var(--text);
+            border: 1px solid var(--border);
+        }
+
+        .btn-ghost:hover {
+            background: var(--border);
+        }
+
+        .btn-success {
+            background: var(--success);
+            color: #000;
+        }
+
+        .btn-success:hover {
+            filter: brightness(1.1);
+        }
+
+        .btn:active {
+            transform: scale(.97);
+        }
+
+        main {
+            display: flex;
+            flex: 1;
+            gap: 0;
+        }
+
+        .portal-col {
             flex: 1;
             display: flex;
             flex-direction: column;
-            background-color: var(--surface-color);
-            border-radius: 12px;
-            border: 1px solid var(--border-color);
-            overflow: hidden;
+            border-right: 1px solid var(--border);
+            min-height: calc(100vh - 120px);
         }
 
-        .portal-header {
-            padding: 1rem 1.5rem;
-            background-color: var(--surface-hover);
-            border-bottom: 1px solid var(--border-color);
-            font-size: 1.1rem;
-            font-weight: 600;
+        .portal-col:last-child {
+            border-right: none;
+        }
+
+        .col-header {
+            padding: 0.85rem 1.5rem;
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
             display: flex;
             align-items: center;
             justify-content: space-between;
         }
 
-        .portal-content {
-            padding: 1.5rem;
-            overflow-y: auto;
-            flex: 1;
+        .col-title {
+            font-size: 0.9rem;
+            font-weight: 600;
             display: flex;
-            flex-direction: column;
-            gap: 1.5rem;
+            align-items: center;
+            gap: 0.5rem;
         }
 
-        .task-grid {
-            display: flex;
-            flex-direction: column;
-            gap: 1.5rem;
+        .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
         }
 
-        .task-card {
-            background-color: var(--surface-color);
-            border: 1px solid var(--border-color);
-            border-radius: 12px;
-            padding: 1.5rem;
-            transition: all 0.2s ease-in-out;
+        .dot-blue {
+            background: var(--primary);
+        }
+
+        .dot-cyan {
+            background: var(--cyan);
+        }
+
+        .col-body {
+            padding: 1.25rem;
             display: flex;
             flex-direction: column;
             gap: 1rem;
+            overflow-y: auto;
+            flex: 1;
+        }
+
+        /* Task card */
+        .task-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            overflow: hidden;
+            transition: border-color .2s;
         }
 
         .task-card:hover {
-            border-color: var(--primary-color);
-            transform: translateY(-2px);
-            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+            border-color: var(--primary);
         }
 
-        .task-header {
+        .card-top {
+            padding: 0.9rem 1.1rem;
             display: flex;
-            justify-content: space-between;
             align-items: flex-start;
+            justify-content: space-between;
+            border-bottom: 1px solid var(--border);
         }
 
-        .task-title {
-            font-size: 1.1rem;
+        .card-title {
             font-weight: 600;
+            font-size: 0.95rem;
+            margin-bottom: 0.2rem;
+        }
+
+        .card-sub {
+            font-size: 0.75rem;
+            color: var(--muted);
+            font-family: monospace;
+        }
+
+        .badge {
+            font-size: 0.68rem;
+            font-weight: 700;
+            padding: 3px 8px;
+            border-radius: 20px;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+            white-space: nowrap;
+        }
+
+        .badge-pending {
+            background: rgba(56, 139, 253, .12);
+            color: var(--primary);
+            border: 1px solid rgba(56, 139, 253, .3);
+        }
+
+        .badge-queued {
+            background: rgba(57, 208, 216, .12);
+            color: var(--cyan);
+            border: 1px solid rgba(57, 208, 216, .3);
+        }
+
+        .badge-done {
+            background: rgba(63, 185, 80, .12);
+            color: var(--success);
+            border: 1px solid rgba(63, 185, 80, .3);
+        }
+
+        .badge-reject {
+            background: rgba(248, 81, 73, .12);
+            color: var(--danger);
+            border: 1px solid rgba(248, 81, 73, .3);
+        }
+
+        .badge-info {
+            background: rgba(210, 153, 34, .12);
+            color: var(--warning);
+            border: 1px solid rgba(210, 153, 34, .3);
+        }
+
+        .card-body {
+            padding: 1rem 1.1rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.85rem;
+        }
+
+        /* Form fields */
+        .field {
+            display: flex;
+            flex-direction: column;
+            gap: 0.3rem;
+        }
+
+        .field label {
+            font-size: 0.78rem;
+            font-weight: 500;
+            color: var(--muted);
+        }
+
+        .field input,
+        .field select,
+        .field textarea {
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 0.55rem 0.75rem;
+            color: var(--text);
+            font-family: inherit;
+            font-size: 0.88rem;
+            transition: border-color .15s;
+            width: 100%;
+        }
+
+        .field input:focus,
+        .field select:focus,
+        .field textarea:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(56, 139, 253, .12);
+        }
+
+        .field input[readonly],
+        .field textarea[readonly] {
+            opacity: .6;
+            cursor: default;
+            background: var(--surface2);
+        }
+
+        .field-row {
+            display: flex;
+            gap: 0.75rem;
+        }
+
+        .field-row .field {
+            flex: 1;
+        }
+
+        .section-label {
+            font-size: 0.72rem;
+            font-weight: 600;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: .07em;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 0.4rem;
+            margin-bottom: 0.1rem;
+        }
+
+        .radio-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.4rem;
+            margin-top: 0.1rem;
+        }
+
+        .radio-option {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            cursor: pointer;
+        }
+
+        .radio-option input[type=radio] {
+            accent-color: var(--primary);
+            width: 15px;
+            height: 15px;
+            cursor: pointer;
+        }
+
+        .radio-option span {
+            font-size: 0.88rem;
+        }
+
+        .feedback-box {
+            background: rgba(248, 81, 73, .07);
+            border-left: 3px solid var(--danger);
+            border-radius: 0 6px 6px 0;
+            padding: 0.6rem 0.75rem;
+        }
+
+        .feedback-box .fb-label {
+            font-size: 0.72rem;
+            font-weight: 600;
+            color: var(--danger);
+            margin-bottom: 0.2rem;
+        }
+
+        .feedback-box p {
+            font-size: 0.85rem;
             margin: 0;
         }
 
-        .task-badge {
-            font-size: 0.75rem;
-            font-weight: 600;
-            padding: 0.25rem 0.5rem;
-            border-radius: 999px;
-            background-color: rgba(59, 130, 246, 0.1);
-            color: #60a5fa;
-            text-transform: uppercase;
-        }
-
-        .task-meta {
-            font-size: 0.85rem;
-            color: var(--text-muted);
-            display: flex;
-            flex-direction: column;
-            gap: 0.25rem;
-        }
-
-        .form-group {
-            display: flex;
-            flex-direction: column;
-            gap: 0.5rem;
-            margin-top: 0.5rem;
-        }
-
-        label {
-            font-size: 0.85rem;
-            font-weight: 500;
-            color: var(--text-muted);
-        }
-
-        input, select, textarea {
-            background-color: var(--bg-color);
-            border: 1px solid var(--border-color);
+        .queued-notice {
+            background: rgba(57, 208, 216, .07);
+            border: 1px solid rgba(57, 208, 216, .2);
             border-radius: 6px;
-            padding: 0.75rem;
-            color: var(--text-main);
-            font-family: inherit;
-            font-size: 0.95rem;
-            transition: border-color 0.2s;
-            width: 100%;
-            box-sizing: border-box;
+            padding: 0.75rem 1rem;
+            font-size: 0.85rem;
+            color: var(--cyan);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
         }
 
-        .input-wrapper {
+        .history-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        .history-card summary {
+            padding: 0.85rem 1.1rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            list-style: none;
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+
+        .history-card summary::-webkit-details-marker {
+            display: none;
+        }
+
+        .history-body {
+            padding: 0.85rem 1.1rem;
+            border-top: 1px solid var(--border);
+            font-size: 0.85rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.4rem;
+            color: var(--muted);
+        }
+
+        .history-body span b {
+            color: var(--text);
+        }
+
+        .empty {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            color: var(--muted);
+            text-align: center;
+            padding: 3rem;
+        }
+
+        .empty-icon {
+            font-size: 2rem;
+            opacity: .4;
+        }
+
+        .empty p {
+            font-size: 0.88rem;
+        }
+
+        .dice {
+            background: none;
+            border: none;
+            color: var(--muted);
+            cursor: pointer;
+            font-size: 1rem;
+            padding: 2px 4px;
+            opacity: .6;
+            transition: opacity .15s;
+        }
+
+        .dice:hover {
+            opacity: 1;
+        }
+
+        .input-wrap {
             position: relative;
             display: flex;
             align-items: center;
-            width: 100%;
         }
 
-        .input-wrapper input, .input-wrapper textarea {
-            padding-right: 2.5rem;
+        .input-wrap input,
+        .input-wrap textarea {
+            padding-right: 2rem;
         }
 
-        .random-fill-icon {
+        .input-wrap .dice {
             position: absolute;
-            right: 8px;
-            cursor: pointer;
-            background: none;
-            border: none;
-            font-size: 1.1rem;
-            opacity: 0.5;
-            transition: opacity 0.2s, transform 0.1s;
-            padding: 4px;
-            border-radius: 4px;
+            right: 6px;
+            top: 50%;
+            transform: translateY(-50%);
         }
 
-        .input-wrapper.textarea-wrapper .random-fill-icon {
-            top: 8px;
-        }
-
-        .random-fill-icon:hover {
-            opacity: 1;
-            background: var(--surface-hover);
-        }
-
-        .random-fill-icon:active {
-            transform: scale(0.9);
-        }
-
-        input:focus, select:focus, textarea:focus {
-            outline: none;
-            border-color: var(--primary-color);
-            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
-        }
-
-        button {
-            background-color: var(--primary-color);
-            color: white;
-            border: none;
-            border-radius: 6px;
-            padding: 0.75rem 1rem;
-            font-weight: 600;
-            font-size: 0.95rem;
-            cursor: pointer;
-            transition: background-color 0.2s, transform 0.1s;
-            margin-top: auto;
-        }
-
-        button:hover {
-            background-color: var(--primary-hover);
-        }
-
-        button:active {
-            transform: scale(0.98);
-        }
-
-        .empty-state {
-            grid-column: 1 / -1;
-            text-align: center;
-            padding: 4rem 2rem;
-            background-color: var(--surface-color);
-            border: 1px dashed var(--border-color);
-            border-radius: 12px;
-            color: var(--text-muted);
-        }
-
-        .refresh-btn {
-            background-color: var(--surface-hover);
-            border: 1px solid var(--border-color);
-            color: var(--text-main);
-        }
-
-        .refresh-btn:hover {
-            background-color: var(--border-color);
+        .input-wrap.ta-wrap .dice {
+            top: 10px;
+            transform: none;
         }
     </style>
 </head>
+
 <body>
 
     <header>
-        <h1>NSW Task Portal</h1>
-        <button class="refresh-btn" onclick="fetchTasks()">↻ Refresh</button>
+        <div class="logo">
+            <div class="logo-badge">NSW</div>
+            <div>
+                <div style="font-weight:600;font-size:1rem;">Phyto Permit Portal</div>
+                <div class="header-sub">Data-Driven Orchestration Demo</div>
+            </div>
+        </div>
+        <button class="btn btn-ghost" onclick="fetchTasks()">↻ Refresh</button>
     </header>
 
-    <div class="container" style="max-width: 1400px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; background: var(--surface-color); padding: 1.5rem; border-radius: 12px; border: 1px solid var(--border-color);">
-            <div>
-                <h2 style="margin: 0 0 0.5rem 0;">Start New Workflow</h2>
-                <p style="margin: 0; color: var(--text-muted);">Launch a new permit application process instance.</p>
-            </div>
-            <button onclick="startWorkflow()" style="padding: 1rem 2rem; font-size: 1.1rem; border-radius: 8px;">🚀 Launch Application</button>
-        </div>
-
-        <p style="color: var(--text-muted);">Please complete your assigned tasks to progress the workflow.</p>
-        
-        <div class="portal-layout">
-            <!-- User Portal -->
-            <div class="portal-column">
-                <div class="portal-header">
-                    <span>User Portal</span>
-                </div>
-                <div class="portal-content" id="userTaskGrid">
-                    <!-- User Tasks and Completed Applications will be rendered here -->
-                </div>
-            </div>
-
-            <!-- Reviewer Portal -->
-            <div class="portal-column">
-                <div class="portal-header">
-                    <span>Reviewer Portal</span>
-                </div>
-                <div class="portal-content" id="reviewerTaskGrid">
-                    <!-- Reviewer Tasks will be rendered here -->
-                </div>
-            </div>
-        </div>
+    <div class="launch-bar">
+        <label for="applicantInput">Applicant Name</label>
+        <input id="applicantInput" type="text" placeholder="e.g. Acme Farms Ltd." value="Acme Farms Ltd.">
+        <button class="btn btn-primary" onclick="startWorkflow()">🚀 Launch Phyto Permit Application</button>
     </div>
 
+    <main>
+        <!-- User Portal -->
+        <div class="portal-col">
+            <div class="col-header">
+                <div class="col-title">
+                    <div class="dot dot-blue"></div> User Portal
+                </div>
+                <span style="font-size:.75rem;color:var(--muted);">PENDING_USER</span>
+            </div>
+            <div class="col-body" id="userCol">
+                <div class="empty">
+                    <div class="empty-icon">📋</div>
+                    <p>No active tasks</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Reviewer Portal -->
+        <div class="portal-col">
+            <div class="col-header">
+                <div class="col-title">
+                    <div class="dot dot-cyan"></div> Reviewer Portal
+                </div>
+                <span style="font-size:.75rem;color:var(--muted);">QUEUED_EXTERNALLY</span>
+            </div>
+            <div class="col-body" id="reviewerCol">
+                <div class="empty">
+                    <div class="empty-icon">🔍</div>
+                    <p>No pending reviews</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- History -->
+        <div class="portal-col">
+            <div class="col-header">
+                <div class="col-title">
+                    <div class="dot" style="background:var(--muted)"></div> Completed
+                </div>
+            </div>
+            <div class="col-body" id="historyCol">
+                <div class="empty">
+                    <div class="empty-icon">✅</div>
+                    <p>Completed tasks appear here</p>
+                </div>
+            </div>
+        </div>
+    </main>
+
     <script>
+        // ── Random fill helpers ──────────────────────────────────────────────────────
+        const RAND = {
+            name: ["Acme Farms Ltd.", "Green Valley Co.", "Sunrise Orchards", "Blue Ridge Produce", "Coastal Growers"],
+            loc: ["123 Farm Rd, Orange NSW 2800", "45 Valley Way, Bathurst NSW 2795", "88 Orchard Lane, Griffith NSW 2680"],
+            crop: ["Apples", "Citrus", "Stone Fruit", "Grapes", "Mangoes"],
+            dest: ["Japan", "China", "South Korea", "United States", "Singapore"],
+            comment: ["Looks good, no issues.", "Please provide additional inspection docs.", "Approved pending final check.", "Commodities meet all requirements."],
+        };
+        function rand(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+        function fillEl(id, key) { const e = document.getElementById(id); if (e) e.value = rand(RAND[key]); }
+
+        // ── API ──────────────────────────────────────────────────────────────────────
         async function startWorkflow() {
+            const name = document.getElementById('applicantInput').value.trim() || 'Applicant';
             try {
-                const response = await fetch('/api/start', { method: 'POST' });
-                if (response.ok) {
-                    const data = await response.json();
-                    alert(`Workflow started successfully! ID: ${data.workflow_id}`);
-                    fetchTasks();
-                } else {
-                    const text = await response.text();
-                    alert(`Failed to start: ${text}`);
-                }
-            } catch (err) {
-                console.error(err);
-                alert("Network error occurred");
-            }
+                const r = await fetch('/api/start', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ applicant_name: name })
+                });
+                if (r.ok) { fetchTasks(); }
+                else { alert('Failed to start: ' + await r.text()); }
+            } catch (e) { alert('Network error'); }
         }
 
         async function fetchTasks() {
-            const userGrid = document.getElementById('userTaskGrid');
-            const reviewerGrid = document.getElementById('reviewerTaskGrid');
-            
-            userGrid.innerHTML = '<div class="empty-state">Loading tasks...</div>';
-            reviewerGrid.innerHTML = '<div class="empty-state">Loading tasks...</div>';
-            
             try {
-                const response = await fetch('/api/tasks');
-                const tasks = await response.json();
-                
-                // Active tasks are anything not yet marked as completed by the graph END node
-                const pendingTasks = tasks.filter(t => !t.is_completed);
-                
-                // Completed tasks are moved to the history list
-                const completedL2 = tasks.filter(t => t.is_completed);
-                
-                const userTasks = pendingTasks.filter(t => t.task_template_id === 'user_submission_form');
-                const reviewerTasks = pendingTasks.filter(t => t.task_template_id === 'reviewer_submission_form');
-
-                if (userTasks.length === 0 && completedL2.length === 0) {
-                    userGrid.innerHTML = '<div class="empty-state"><h3>No tasks</h3><p>All caught up!</p></div>';
-                } else {
-                    userGrid.innerHTML = '';
-                    userTasks.sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).forEach(task => {
-                        userGrid.appendChild(createTaskCard(task));
-                    });
-                    completedL2.sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).forEach(task => {
-                        userGrid.appendChild(createCompletedCard(task));
-                    });
-                }
-
-                if (reviewerTasks.length === 0) {
-                    reviewerGrid.innerHTML = '<div class="empty-state"><h3>No pending tasks</h3><p>All caught up!</p></div>';
-                } else {
-                    reviewerGrid.innerHTML = '';
-                    reviewerTasks.sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).forEach(task => {
-                        reviewerGrid.appendChild(createTaskCard(task));
-                    });
-                }
-
-            } catch (err) {
-                console.error(err);
-                userGrid.innerHTML = '<div class="empty-state" style="color: var(--danger);">Failed to load tasks.</div>';
-                reviewerGrid.innerHTML = '<div class="empty-state" style="color: var(--danger);">Failed to load tasks.</div>';
-            }
+                const r = await fetch('/api/tasks');
+                const tasks = await r.json() || [];
+                renderAll(tasks);
+            } catch (e) { console.error(e); }
         }
 
-        function createCompletedCard(task) {
-            const card = document.createElement('div');
-            card.className = 'task-card';
-            
-            const appName = task.inputs?.applicant_name || 'Unknown';
-            const outcome = task.inputs?.review_outcome || 'Unknown';
-            
-            let badgeColor = outcome === 'approve' ? 'var(--success)' : (outcome === 'reject' ? 'var(--danger)' : 'var(--text-muted)');
-            
-            card.innerHTML = `
-                <details style="width: 100%;">
-                    <summary style="cursor: pointer; display: flex; justify-content: space-between; align-items: center; outline: none;">
-                        <span style="font-weight: 600;">Application: ${appName}</span>
-                        <span class="task-badge" style="background-color: transparent; border: 1px solid ${badgeColor}; color: ${badgeColor}; padding: 0.2rem 0.5rem; font-size: 0.7rem;">${outcome.toUpperCase()}</span>
-                    </summary>
-                    <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
-                        <div class="task-meta">
-                            <span><strong>Workflow ID:</strong> ${task.parent_workflow_id}</span>
-                            <span><strong>Completed On:</strong> ${new Date(task.created_at).toLocaleString()}</span>
-                        </div>
-                        <div style="margin-top: 1rem; padding: 10px; background: rgba(255,255,255,0.03); border-radius: 6px;">
-                            <p style="margin: 0; font-size: 0.9rem;"><strong>Justification:</strong> ${task.inputs?.justification || 'N/A'}</p>
-                        </div>
-                    </div>
-                </details>
-            `;
-            return card;
-        }
-
-        function createTaskCard(task) {
-            const card = document.createElement('div');
-            card.className = 'task-card';
-
-            const templateName = task.task_template_id === 'user_submission_form' 
-                ? 'Application Submission' 
-                : task.task_template_id === 'reviewer_submission_form' 
-                    ? 'Review Application' 
-                    : task.task_template_id;
-
-            let formHtml = '';
-            
-            if (task.task_template_id === 'user_submission_form') {
-                const preName = task.inputs?.applicant_name || '';
-                const preJust = task.inputs?.justification || '';
-                const comments = task.inputs?.reviewer_comments || '';
-                
-                let commentsHtml = '';
-                if (comments) {
-                    commentsHtml = `
-                        <div style="background: rgba(239, 68, 68, 0.1); border-left: 4px solid var(--danger); padding: 10px; border-radius: 4px; margin-bottom: 1rem;">
-                            <strong style="color: var(--danger); font-size: 0.9rem;">Reviewer Feedback:</strong>
-                            <p style="margin: 0.25rem 0 0 0; font-size: 0.9rem;">${comments}</p>
-                        </div>
-                    `;
-                }
-
-                formHtml = `
-                    ${commentsHtml}
-                    <div class="form-group">
-                        <label>Applicant Name</label>
-                        <div class="input-wrapper">
-                            <input type="text" id="input_name_${task.node_id}" value="${preName}" placeholder="John Doe" required>
-                            <button type="button" class="random-fill-icon" onclick="fillRandom('input_name_${task.node_id}', 'name')" title="Fill Random Name">🎲</button>
-                        </div>
-                    </div>
-                    <div class="form-group">
-                        <label>Justification</label>
-                        <div class="input-wrapper textarea-wrapper">
-                            <textarea id="input_just_${task.node_id}" rows="3" placeholder="Why do you need this permit?" required>${preJust}</textarea>
-                            <button type="button" class="random-fill-icon" onclick="fillRandom('input_just_${task.node_id}', 'text')" title="Fill Random Text">🎲</button>
-                        </div>
-                    </div>
-                `;
-            } else if (task.task_template_id === 'reviewer_submission_form') {
-                const appName = task.inputs?.applicant_name || 'N/A';
-                const appJust = task.inputs?.justification || 'N/A';
-                
-                formHtml = `
-                    <div class="form-group" style="background: rgba(255,255,255,0.05); padding: 10px; border-radius: 6px; margin-bottom: 1rem;">
-                        <label style="color: var(--primary-color);">Application Data from User</label>
-                        <p style="margin: 0.5rem 0 0.25rem 0; font-size: 0.9rem;"><strong>Name:</strong> ${appName}</p>
-                        <p style="margin: 0; font-size: 0.9rem;"><strong>Justification:</strong> ${appJust}</p>
-                    </div>
-                    <div class="form-group">
-                        <label>Review Outcome</label>
-                        <select id="input_outcome_${task.node_id}">
-                            <option value="approve">Approve</option>
-                            <option value="reject">Reject</option>
-                            <option value="needs_more_info">Needs More Info</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>Reviewer Comments</label>
-                        <div class="input-wrapper">
-                            <input type="text" id="input_comments_${task.node_id}" placeholder="Optional comments...">
-                            <button type="button" class="random-fill-icon" onclick="fillRandom('input_comments_${task.node_id}', 'comment')" title="Fill Random Comment">🎲</button>
-                        </div>
-                    </div>
-                `;
-            } else {
-                formHtml = `<div class="form-group"><p>Unknown task type</p></div>`;
-            }
-
-            let integrationBadge = '';
-            if (task.integration_status === 'QUEUED_EXTERNALLY') {
-                integrationBadge = `<span style="font-size: 0.6rem; color: #00ffff; background: rgba(0,255,255,0.1); padding: 2px 6px; border-radius: 4px; border: 1px solid #00ffff; margin-left: 8px; vertical-align: middle;">📥 RECEIVED VIA API</span>`;
-            }
-
-            card.innerHTML = `
-                <div class="task-header">
-                    <h3 class="task-title">${templateName} ${integrationBadge}</h3>
-                    <span class="task-badge">Active</span>
-                </div>
-                <div class="task-meta">
-                    <span><strong>Workflow:</strong> ${task.parent_workflow_id}</span>
-                    <span><strong>Node:</strong> ${task.node_id}</span>
-                </div>
-                ${formHtml}
-                <button onclick="submitTask('${task.node_id}', '${task.task_template_id}')">Submit Task</button>
-            `;
-
-            return card;
-        }
-
-        function fillRandom(id, type) {
-            const el = document.getElementById(id);
-            if (!el) return;
-
-            const names = ["Alice Smith", "Bob Jones", "Charlie Brown", "Diana Prince", "Evan Wright"];
-            const justifications = [
-                "I need to build a new shed in the backyard.",
-                "Expanding the driveway for a new vehicle.",
-                "Commercial property renovation for a new shop.",
-                "Installing a new HVAC system.",
-                "Adding a pool to the property."
-            ];
-            const comments = [
-                "Looks good to me.",
-                "Please provide blueprint details.",
-                "Approved pending inspection.",
-                "Needs revision on section 3.",
-                "Everything is in order."
-            ];
-
-            if (type === 'name') {
-                el.value = names[Math.floor(Math.random() * names.length)];
-            } else if (type === 'text') {
-                el.value = justifications[Math.floor(Math.random() * justifications.length)];
-            } else if (type === 'comment') {
-                el.value = comments[Math.floor(Math.random() * comments.length)];
-            }
-        }
-
-        async function submitTask(taskId, templateId) {
-            const output = {};
-
-            if (templateId === 'user_submission_form') {
-                output.applicant_name = document.getElementById(`input_name_${taskId}`).value;
-                output.justification = document.getElementById(`input_just_${taskId}`).value;
-                if (!output.applicant_name) {
-                    alert("Please enter a name");
-                    return;
-                }
-            } else if (templateId === 'reviewer_submission_form') {
-                output.review_outcome = document.getElementById(`input_outcome_${taskId}`).value;
-                output.reviewer_comments = document.getElementById(`input_comments_${taskId}`).value;
-            }
-
+        async function submitTask(taskID, payload) {
             try {
-                const response = await fetch('/api/submit', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        task_id: taskId,
-                        output: output
-                    })
+                const r = await fetch('/api/task/' + taskID, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
                 });
-
-                if (response.ok) {
-                    // Success, refresh the list
-                    fetchTasks();
-                } else {
-                    const text = await response.text();
-                    alert(`Failed to submit: ${text}`);
-                }
-            } catch (err) {
-                console.error(err);
-                alert("Network error occurred");
-            }
+                if (r.ok) { fetchTasks(); }
+                else { alert('Submit failed: ' + await r.text()); }
+            } catch (e) { alert('Network error'); }
         }
 
-        // Initial load
-        fetchTasks();
+        // ── Rendering ────────────────────────────────────────────────────────────────
+        function renderAll(tasks) {
+            const userCol = document.getElementById('userCol');
+            const reviewerCol = document.getElementById('reviewerCol');
+            const historyCol = document.getElementById('historyCol');
+
+            const pending = tasks.filter(t => t.status === 'PENDING_USER');
+            const queued = tasks.filter(t => t.status === 'QUEUED_EXTERNALLY');
+            const completed = tasks.filter(t => t.status === 'COMPLETED');
+
+            userCol.innerHTML = pending.length ? '' : '<div class="empty"><div class="empty-icon">📋</div><p>No active tasks</p></div>';
+            reviewerCol.innerHTML = queued.length ? '' : '<div class="empty"><div class="empty-icon">🔍</div><p>No pending reviews</p></div>';
+            historyCol.innerHTML = completed.length ? '' : '<div class="empty"><div class="empty-icon">✅</div><p>Completed tasks appear here</p></div>';
+
+            pending.forEach(t => userCol.appendChild(renderUserCard(t)));
+            queued.forEach(t => reviewerCol.appendChild(renderReviewerCard(t)));
+            completed.forEach(t => historyCol.appendChild(renderHistoryCard(t)));
+        }
+
+        function getStr(data, ...keys) {
+            let obj = data || {};
+            for (const k of keys) {
+                if (obj == null) return '';
+                obj = obj[k];
+            }
+            return obj || '';
+        }
+
+        function renderUserCard(task) {
+            const d = task.data || {};
+            const uf = d.userform || {};
+            const rf = d.reviewerform || {};
+            const tid = task.task_id;
+
+            // Show reviewer feedback if looping back
+            let feedbackHtml = '';
+            if (rf.reviewer_comments) {
+                feedbackHtml = `<div class="feedback-box">
+            <div class="fb-label">⚠ Reviewer Feedback</div>
+            <p>${rf.reviewer_comments}</p>
+        </div>`;
+            }
+
+            const card = document.createElement('div');
+            card.className = 'task-card';
+            card.innerHTML = `
+        <div class="card-top">
+            <div>
+                <div class="card-title">Phyto Sanitary Application</div>
+                <div class="card-sub">${tid} · node: ${task.active_activity_id || '—'}</div>
+            </div>
+            <span class="badge badge-pending">Pending User</span>
+        </div>
+        <div class="card-body">
+            ${feedbackHtml}
+            <div class="section-label">Applicant Details</div>
+            <div class="field">
+                <label>Registered Applicant Name</label>
+                <input type="text" id="${tid}_appname" value="${uf.applicant_name || ''}" readonly title="Auto-populated from your profile">
+            </div>
+            <div class="section-label">Consignment Details</div>
+            <div class="field">
+                <label>Farm Address / Location</label>
+                <div class="input-wrap">
+                    <input type="text" id="${tid}_loc" value="${uf.farm_location || ''}" placeholder="e.g. 123 Farm Rd, Orange NSW">
+                    <button class="dice" onclick="fillEl('${tid}_loc','loc')" title="Random">🎲</button>
+                </div>
+            </div>
+            <div class="field-row">
+                <div class="field">
+                    <label>Commodity / Crop Type</label>
+                    <div class="input-wrap">
+                        <input type="text" id="${tid}_crop" value="${uf.crop_type || ''}" placeholder="e.g. Apples">
+                        <button class="dice" onclick="fillEl('${tid}_crop','crop')" title="Random">🎲</button>
+                    </div>
+                </div>
+                <div class="field">
+                    <label>Destination Country</label>
+                    <div class="input-wrap">
+                        <input type="text" id="${tid}_dest" value="${uf.export_destination || ''}" placeholder="e.g. Japan">
+                        <button class="dice" onclick="fillEl('${tid}_dest','dest')" title="Random">🎲</button>
+                    </div>
+                </div>
+            </div>
+            <button class="btn btn-primary" onclick="submitUserForm('${tid}')">Submit Application →</button>
+        </div>`;
+            return card;
+        }
+
+        function submitUserForm(tid) {
+            const loc = document.getElementById(tid + '_loc')?.value?.trim();
+            const crop = document.getElementById(tid + '_crop')?.value?.trim();
+            const dest = document.getElementById(tid + '_dest')?.value?.trim();
+            if (!loc || !crop || !dest) { alert('Please fill in all required fields.'); return; }
+            const appName = document.getElementById(tid + '_appname')?.value?.trim();
+            submitTask(tid, {
+                userform: { applicant_name: appName, farm_location: loc, crop_type: crop, export_destination: dest }
+            });
+        }
+
+        function renderReviewerCard(task) {
+            const d = task.data || {};
+            const uf = d.userform || {};
+            const tid = task.task_id;
+
+            const card = document.createElement('div');
+            card.className = 'task-card';
+            card.innerHTML = `
+        <div class="card-top">
+            <div>
+                <div class="card-title">Review: ${uf.applicant_name || 'Application'}</div>
+                <div class="card-sub">${tid} · node: ${task.active_activity_id || '—'}</div>
+            </div>
+            <span class="badge badge-queued">Queued Externally</span>
+        </div>
+        <div class="card-body">
+            <div class="section-label">Submitted Application Data (Read Only)</div>
+            <div class="field">
+                <label>Applicant Name</label>
+                <input type="text" value="${uf.applicant_name || ''}" readonly>
+            </div>
+            <div class="field">
+                <label>Farm Address</label>
+                <input type="text" value="${uf.farm_location || ''}" readonly>
+            </div>
+            <div class="field-row">
+                <div class="field"><label>Commodity</label><input type="text" value="${uf.crop_type || ''}" readonly></div>
+                <div class="field"><label>Destination</label><input type="text" value="${uf.export_destination || ''}" readonly></div>
+            </div>
+            <div class="section-label">Official Review</div>
+            <div class="field">
+                <label>Review Decision</label>
+                <div class="radio-group">
+                    <label class="radio-option"><input type="radio" name="outcome_${tid}" value="approve" checked><span>✅ Approve</span></label>
+                    <label class="radio-option"><input type="radio" name="outcome_${tid}" value="reject"><span>❌ Reject</span></label>
+                    <label class="radio-option"><input type="radio" name="outcome_${tid}" value="needs_more_info"><span>🔄 Needs More Info</span></label>
+                </div>
+            </div>
+            <div class="field">
+                <label>Comments / Justification</label>
+                <div class="input-wrap ta-wrap">
+                    <textarea id="${tid}_comments" rows="2" placeholder="Provide feedback if rejecting or requesting more info…"></textarea>
+                    <button class="dice" onclick="fillEl('${tid}_comments','comment')" title="Random">🎲</button>
+                </div>
+            </div>
+            <button class="btn btn-success" onclick="submitReview('${tid}')">Submit Review →</button>
+        </div>`;
+            return card;
+        }
+
+        function submitReview(tid) {
+            const outcome = document.querySelector(`input[name="outcome_${tid}"]:checked`)?.value;
+            const comments = document.getElementById(tid + '_comments')?.value?.trim();
+            if (!outcome) { alert('Please select a review decision.'); return; }
+            submitTask(tid, {
+                reviewerform: { review_outcome: outcome, reviewer_comments: comments || '' }
+            });
+        }
+
+        function renderHistoryCard(task) {
+            const d = task.data || {};
+            const uf = d.userform || {};
+            const rf = d.reviewerform || {};
+            const outcome = rf.review_outcome || 'unknown';
+
+            let badgeClass = 'badge-info';
+            if (outcome === 'approve') badgeClass = 'badge-done';
+            if (outcome === 'reject') badgeClass = 'badge-reject';
+
+            const el = document.createElement('details');
+            el.className = 'history-card';
+            el.innerHTML = `
+        <summary>
+            <span>${uf.applicant_name || task.task_id}</span>
+            <span class="badge ${badgeClass}">${outcome.replace('_', ' ')}</span>
+        </summary>
+        <div class="history-body">
+            <span><b>Task ID:</b> ${task.task_id}</span>
+            <span><b>Farm:</b> ${uf.farm_location || '—'}</span>
+            <span><b>Crop:</b> ${uf.crop_type || '—'} → ${uf.export_destination || '—'}</span>
+            <span><b>Comments:</b> ${rf.reviewer_comments || '—'}</span>
+        </div>`;
+            return el;
+        }
+
+        // Auto-refresh every 4 seconds
+        //fetchTasks();
+        //setInterval(fetchTasks, 4000);
     </script>
 </body>
+
 </html>

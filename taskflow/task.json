@@ -1,82 +1,59 @@
 {
-  "id": "application_form_task_flow",
-  "name": "Application Form Task Workflow",
+  "id": "Phyto_Application_Flow_v1",
+  "name": "Phyto Sanitary Application Sub-Process",
   "version": 1,
   "nodes": [
+    { "id": "start", "type": "START" },
     {
-      "id": "start",
-      "type": "START"
-    },
-    {
-      "id": "UserSubmission",
+      "id": "user_submission",
       "type": "TASK",
-      "task_template_id": "user_submission_form",
+      "task_template_id": "generic_user_input",
       "input_mapping": {
-        "applicant_name": "applicant_name",
-        "justification": "justification",
-        "reviewer_comments": "reviewer_comments"
+        "userform": "userform"
       },
       "output_mapping": {
-        "applicant_name": "applicant_name",
-        "justification": "justification"
+        "userform": "userform"
       }
     },
     {
-      "id": "ReviewerSubmission",
+      "id": "external_review",
       "type": "TASK",
-      "task_template_id": "reviewer_submission_form",
+      "task_template_id": "generic_external_review",
       "input_mapping": {
-        "applicant_name": "applicant_name",
-        "justification": "justification"
+        "userform": "userform"
       },
       "output_mapping": {
-        "review_outcome": "review_outcome",
-        "reviewer_comments": "reviewer_comments"
+        "reviewerform": "reviewerform"
       }
     },
     {
-      "id": "ReviewOutcomeGateway",
+      "id": "review_gateway",
       "type": "GATEWAY",
       "gateway_type": "EXCLUSIVE_SPLIT"
     },
-    {
-      "id": "end",
-      "type": "END"
-    }
+    { "id": "end", "type": "END" }
   ],
   "edges": [
+    { "id": "e1", "source_id": "start", "target_id": "user_submission" },
+    { "id": "e2", "source_id": "user_submission", "target_id": "external_review" },
+    { "id": "e3", "source_id": "external_review", "target_id": "review_gateway" },
     {
-      "id": "e_start_to_user",
-      "source_id": "start",
-      "target_id": "UserSubmission"
-    },
-    {
-      "id": "e_user_to_reviewer",
-      "source_id": "UserSubmission",
-      "target_id": "ReviewerSubmission"
-    },
-    {
-      "id": "e_reviewer_to_gateway",
-      "source_id": "ReviewerSubmission",
-      "target_id": "ReviewOutcomeGateway"
-    },
-    {
-      "id": "e_gateway_to_end_approve",
-      "source_id": "ReviewOutcomeGateway",
+      "id": "e_approve",
+      "source_id": "review_gateway",
       "target_id": "end",
-      "condition": "review_outcome == 'approve'"
+      "condition": "reviewerform.review_outcome == 'approve'"
     },
     {
-      "id": "e_gateway_to_end_reject",
-      "source_id": "ReviewOutcomeGateway",
+      "id": "e_reject",
+      "source_id": "review_gateway",
       "target_id": "end",
-      "condition": "review_outcome == 'reject'"
+      "condition": "reviewerform.review_outcome == 'reject'"
     },
     {
-      "id": "e_gateway_to_user_needs_info",
-      "source_id": "ReviewOutcomeGateway",
-      "target_id": "UserSubmission",
-      "condition": "review_outcome == 'needs_more_info'"
+      "id": "e_needs_info",
+      "source_id": "review_gateway",
+      "target_id": "user_submission",
+      "condition": "reviewerform.review_outcome == 'needs_more_info'"
     }
   ]
 }

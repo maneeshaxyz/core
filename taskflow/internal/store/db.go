@@ -10,23 +10,37 @@ import (
 
 const dbFilePath = "/tmp/nsw_task_db.json"
 
-// TaskRecord represents a task stored in the DB
+// TaskRecord is the single DB entry per task instance, as described in the architecture doc.
+// It stores both Layer 1 (parent) and Layer 2 (active sub-process) coordinates separately,
+// and holds Data as a namespaced map mirroring the JSONForms structure.
 type TaskRecord struct {
-	ParentWorkflowID string         `json:"parent_workflow_id"`
-	RunID            string         `json:"run_id"`
-	NodeID           string         `json:"node_id"`
-	TaskTemplateID   string         `json:"task_template_id"`
-	ChildWorkflowID  string         `json:"child_workflow_id"`
-	IsCompleted      bool           `json:"is_completed"`
-	IntegrationStatus string        `json:"integration_status"` // e.g. "QUEUED_EXTERNALLY"
-	Inputs           map[string]any `json:"inputs"`
-	CreatedAt        time.Time      `json:"created_at"`
+	TaskID         string `json:"task_id"`
+	TaskType       string `json:"task_type"`
+	UserFormID     string `json:"user_form_id"`
+	ReviewerFormID string `json:"reviewer_form_id"`
+	// Status drives UI rendering ("PENDING_USER", "QUEUED_EXTERNALLY", "COMPLETED")
+	Status string `json:"status"`
+
+	// Layer 1 parent coordinates — used to wake Layer 1 when Layer 2 finishes
+	Layer1WorkflowID string `json:"layer1_workflow_id"`
+	Layer1RunID      string `json:"layer1_run_id"`
+	Layer1NodeID     string `json:"layer1_node_id"`
+
+	// Layer 2 active sub-process coordinates — used to wake Layer 2 via the API
+	Layer2WorkflowID string `json:"layer2_workflow_id"`
+	Layer2RunID      string `json:"layer2_run_id"`
+	ActiveActivityID string `json:"active_activity_id"`
+
+	// Data mirrors the namespaced JSONForms structure: {"userform": {...}, "reviewerform": {...}}
+	Data map[string]any `json:"data"`
+
+	CreatedAt time.Time `json:"created_at"`
 }
 
-// TaskDB is an in-memory database for tasks
+// TaskDB is an in-memory, file-backed database for task records.
 type TaskDB struct {
 	mu    sync.RWMutex
-	tasks map[string]TaskRecord
+	tasks map[string]TaskRecord // keyed by TaskID
 }
 
 func NewTaskDB() *TaskDB {
@@ -34,7 +48,6 @@ func NewTaskDB() *TaskDB {
 		tasks: make(map[string]TaskRecord),
 	}
 
-	// Try to load existing data
 	data, err := os.ReadFile(dbFilePath)
 	if err == nil {
 		if err := json.Unmarshal(data, &db.tasks); err != nil {
@@ -52,7 +65,7 @@ func NewTaskDB() *TaskDB {
 func (db *TaskDB) saveToFile() {
 	data, err := json.MarshalIndent(db.tasks, "", "  ")
 	if err != nil {
-		log.Printf("[TaskDB] Failed to marshal tasks to JSON: %v", err)
+		log.Printf("[TaskDB] Failed to marshal tasks: %v", err)
 		return
 	}
 	if err := os.WriteFile(dbFilePath, data, 0644); err != nil {
@@ -60,10 +73,10 @@ func (db *TaskDB) saveToFile() {
 	}
 }
 
-func (db *TaskDB) SaveTask(taskID string, record TaskRecord) {
+func (db *TaskDB) SaveTask(record TaskRecord) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
-	db.tasks[taskID] = record
+	db.tasks[record.TaskID] = record
 	db.saveToFile()
 }
 
@@ -74,11 +87,11 @@ func (db *TaskDB) GetTask(taskID string) (TaskRecord, bool) {
 	return record, exists
 }
 
-func (db *TaskDB) GetTaskByChildWorkflowID(childWorkflowID string) (TaskRecord, bool) {
+func (db *TaskDB) GetTaskByLayer2WorkflowID(layer2WorkflowID string) (TaskRecord, bool) {
 	db.mu.RLock()
 	defer db.mu.RUnlock()
 	for _, record := range db.tasks {
-		if record.ChildWorkflowID == childWorkflowID {
+		if record.Layer2WorkflowID == layer2WorkflowID {
 			return record, true
 		}
 	}

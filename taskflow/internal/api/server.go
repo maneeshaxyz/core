@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	engine "github.com/OpenNSW/go-temporal-workflow"
@@ -25,15 +26,16 @@ func (s *Server) Start(addr string) {
 	// Serve static files
 	http.Handle("/", http.FileServer(http.Dir("./static")))
 
-	// API Endpoints
+	// API endpoints
 	http.HandleFunc("/api/tasks", s.handleGetTasks)
 	http.HandleFunc("/api/start", s.handleStartWorkflow)
-	http.HandleFunc("/api/submit", s.handleSubmitTask)
+	// Unified task interaction endpoint: POST /api/task/{taskID}
+	http.HandleFunc("/api/task/", s.handleTaskInteraction)
 
-	log.Printf("[API] Starting HTTP API on %s...", addr)
+	log.Printf("[API] Starting HTTP server on %s...", addr)
 	go func() {
 		if err := http.ListenAndServe(addr, nil); err != nil {
-			log.Printf("[API] HTTP Server error: %v", err)
+			log.Printf("[API] HTTP server error: %v", err)
 		}
 	}()
 }
@@ -49,6 +51,13 @@ func (s *Server) handleStartWorkflow(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Accept an optional applicant_name to pre-fill the userform
+	var req struct {
+		ApplicantName string `json:"applicant_name"`
+	}
+	// Ignore decode errors — applicant_name is optional
+	json.NewDecoder(r.Body).Decode(&req) //nolint:errcheck
+
 	fileBytes, err := os.ReadFile("workflow.json")
 	if err != nil {
 		http.Error(w, "Failed to read workflow.json", http.StatusInternalServerError)
@@ -61,10 +70,16 @@ func (s *Server) handleStartWorkflow(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	workflowID := "nsw-demo-wf-" + time.Now().Format("150405")
-	log.Printf("[API] Submitting Workflow ID: %s to Layer 1", workflowID)
+	workflowID := "nsw-phyto-" + time.Now().Format("150405")
+	log.Printf("[API] Starting Layer 1 workflow %s (applicant=%s)", workflowID, req.ApplicantName)
 
-	err = s.manager.GetLayer1Manager().StartWorkflow(context.Background(), workflowID, def, map[string]any{})
+	initialVars := map[string]any{}
+	if req.ApplicantName == "" {
+		req.ApplicantName = "John Doe"
+	}
+	initialVars["applicant_name"] = req.ApplicantName
+
+	err = s.manager.GetLayer1Manager().StartWorkflow(context.Background(), workflowID, def, initialVars)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to start workflow: %v", err), http.StatusInternalServerError)
 		return
@@ -72,60 +87,72 @@ func (s *Server) handleStartWorkflow(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(fmt.Sprintf(`{"status":"ok", "workflow_id":"%s"}`, workflowID)))
+	json.NewEncoder(w).Encode(map[string]string{"status": "ok", "workflow_id": workflowID})
 }
 
-func (s *Server) handleSubmitTask(w http.ResponseWriter, r *http.Request) {
+// handleTaskInteraction is the unified endpoint: POST /api/task/{taskID}
+// It routes the payload to the correct Layer 2 activity using the stored ActiveActivityID.
+func (s *Server) handleTaskInteraction(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "POST only", http.StatusMethodNotAllowed)
 		return
 	}
 
-	var req struct {
-		TaskID string         `json:"task_id"`
-		Output map[string]any `json:"output"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+	// Extract taskID from path: /api/task/{taskID}
+	taskID := strings.TrimPrefix(r.URL.Path, "/api/task/")
+	if taskID == "" {
+		http.Error(w, "missing task ID in path", http.StatusBadRequest)
 		return
 	}
 
 	db := s.manager.GetDB()
-	record, exists := db.GetTask(req.TaskID)
+	record, exists := db.GetTask(taskID)
 	if !exists {
-		http.Error(w, "Task not found", http.StatusNotFound)
+		http.Error(w, "task not found", http.StatusNotFound)
 		return
 	}
 
-	if record.IsCompleted {
-		http.Error(w, "Task already completed", http.StatusConflict)
+	if record.Status == "COMPLETED" {
+		http.Error(w, "task already completed", http.StatusConflict)
 		return
 	}
 
-	// Merge original inputs with the new output from frontend
-	finalOutput := make(map[string]any)
-	for k, v := range record.Inputs {
-		finalOutput[k] = v
-	}
-	for k, v := range req.Output {
-		finalOutput[k] = v
+	// The payload from the UI is a namespaced map matching the JSONForms structure,
+	// e.g. {"userform": {...}} or {"reviewerform": {...}}
+	var payload map[string]any
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		http.Error(w, "invalid JSON body", http.StatusBadRequest)
+		return
 	}
 
-	// Update DB with the merged data but DO NOT mark as completed yet.
-	// The Graph Engine (Child Workflow) will trigger completion when it hits END.
-	record.Inputs = finalOutput
-	db.SaveTask(req.TaskID, record)
+	// Merge submitted data into the stored namespaced Data map
+	if record.Data == nil {
+		record.Data = make(map[string]any)
+	}
+	for k, v := range payload {
+		record.Data[k] = v
+	}
+	db.SaveTask(record)
 
-	// Complete the parent task in Temporal using layer2Manager
-	err := s.manager.GetLayer2Manager().TaskDone(context.Background(), record.ParentWorkflowID, record.RunID, record.NodeID, finalOutput)
+	// Wake up the exact Layer 2 activity using the stored coordinates
+	log.Printf("[API] Waking Layer 2 activity %s in workflow %s (task %s)",
+		record.ActiveActivityID, record.Layer2WorkflowID, taskID)
+
+	err := s.manager.GetLayer2Manager().TaskDone(
+		context.Background(),
+		record.Layer2WorkflowID,
+		record.Layer2RunID,
+		record.ActiveActivityID,
+		record.Data, // pass full namespaced state back to the workflow
+	)
 	if err != nil {
-		log.Printf("[API] Temporal completion failed: %v", err)
-		http.Error(w, "Temporal completion failed", http.StatusInternalServerError)
+		log.Printf("[API] Failed to wake Layer 2 activity: %v", err)
+		http.Error(w, "failed to resume workflow", http.StatusInternalServerError)
 		return
 	}
 
-	log.Printf("[API] Task %s marked as done from Frontend!", req.TaskID)
+	log.Printf("[API] Task %s resumed successfully", taskID)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(`{"status":"ok"}`))
+	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 }
