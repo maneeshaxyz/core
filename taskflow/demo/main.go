@@ -1,3 +1,11 @@
+// Package main is the entry point for the NSW Task Flow demo.
+//
+// Run from the repo root:
+//
+//	go run ./demo
+//
+// It wires together a two-layer Temporal orchestrator and serves the split-pane
+// portal UI on http://localhost:8080.
 package main
 
 import (
@@ -8,9 +16,8 @@ import (
 	"syscall"
 
 	engine "github.com/OpenNSW/go-temporal-workflow"
-	"github.com/OpenNSW/nsw-task-flow/internal/api"
-	"github.com/OpenNSW/nsw-task-flow/internal/orchestrator"
-	"github.com/OpenNSW/nsw-task-flow/internal/store"
+	"github.com/OpenNSW/nsw-task-flow/orchestrator"
+	"github.com/OpenNSW/nsw-task-flow/store"
 	"go.temporal.io/sdk/client"
 )
 
@@ -25,14 +32,17 @@ func main() {
 	defer c.Close()
 
 	// 2. Store & Task Template Registry
+	// Templates are loaded from ./demo/templates/*.json — add a new file to register a new flow.
 	db := store.NewTaskDB()
 	registry := orchestrator.NewTaskTemplateRegistry()
+	if err := loadTemplates(registry, "demo/templates"); err != nil {
+		log.Fatalln("Failed to load task template registry:", err)
+	}
 
 	// 3. Set up Temporal Managers (layer1 and layer2) with deferred task manager wiring
 	var tm *orchestrator.TaskManager
 
 	// --- Layer 1 handlers ---
-	// Layer 1 TASK nodes activate tasks via the Task Template Registry
 	layer1TaskHandler := func(payload engine.TaskPayload) error {
 		log.Printf("\n[Layer 1] Task activated: node=%s template=%s\n", payload.NodeID, payload.TaskTemplateID)
 		if tm != nil {
@@ -54,7 +64,6 @@ func main() {
 	)
 
 	// --- Layer 2 handlers ---
-	// Layer 2 TASK nodes are generic capabilities (generic_user_input, generic_external_review)
 	layer2TaskHandler := func(payload engine.TaskPayload) error {
 		log.Printf("\n[Layer 2] Task activated: node=%s template=%s\n", payload.NodeID, payload.TaskTemplateID)
 		if tm != nil {
@@ -89,10 +98,11 @@ func main() {
 		return nil
 	}
 
-	tm = orchestrator.NewTaskManager(db, registry, layer2Manager, onTaskCompleted)
+	tm = orchestrator.NewTaskManager(db, registry, layer2Manager, onTaskCompleted).
+		WithTaskDefPath("demo/task.json")
 
-	apiServer := api.NewServer(tm, layer1Manager)
-	apiServer.Start(":8080")
+	apiServer := newServer(tm, layer1Manager)
+	apiServer.start(":8080")
 
 	// 5. Start workers
 	log.Println("Starting Layer 1 Temporal Worker...")

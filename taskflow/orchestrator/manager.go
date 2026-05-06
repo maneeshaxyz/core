@@ -9,28 +9,48 @@ import (
 	"time"
 
 	engine "github.com/OpenNSW/go-temporal-workflow"
-	"github.com/OpenNSW/nsw-task-flow/internal/store"
+	"github.com/OpenNSW/nsw-task-flow/store"
 	"github.com/google/uuid"
 )
 
-// TaskManager orchestrates the three-layer architecture described in the design doc.
+// TaskManager orchestrates the two-layer architecture described in the design doc.
 // It bridges Layer 1 (macro journey) and Layer 2 (micro flow) via a single DB entry per task.
 type TaskManager struct {
 	db       *store.TaskDB
 	registry *TaskTemplateRegistry
-	// onTaskCompleted wakes Layer 1 when a Layer 2 sub-workflow completes.
+	// onTaskCompleted is called when a Layer 2 sub-workflow finishes, to resume Layer 1.
 	onTaskCompleted func(layer1WorkflowID string, layer1RunID string, layer1NodeID string, finalVariables map[string]any) error
 	// layer2Manager starts and wakes Layer 2 sub-workflows.
 	layer2Manager engine.TemporalManager
+	// taskDefPath is the path to the Layer 2 workflow definition JSON (default: "task.json").
+	taskDefPath string
 }
 
-func NewTaskManager(db *store.TaskDB, registry *TaskTemplateRegistry, layer2 engine.TemporalManager, onTaskCompleted func(layer1WorkflowID string, layer1RunID string, layer1NodeID string, finalVariables map[string]any) error) *TaskManager {
+// NewTaskManager creates a TaskManager.
+//
+//   - layer2       — the TemporalManager for the Layer 2 queue.
+//   - onTaskCompleted — callback invoked when a Layer 2 workflow completes;
+//     typically calls layer1Manager.TaskDone with the stored parent coordinates.
+func NewTaskManager(
+	db *store.TaskDB,
+	registry *TaskTemplateRegistry,
+	layer2 engine.TemporalManager,
+	onTaskCompleted func(layer1WorkflowID string, layer1RunID string, layer1NodeID string, finalVariables map[string]any) error,
+) *TaskManager {
 	return &TaskManager{
 		db:              db,
 		registry:        registry,
 		onTaskCompleted: onTaskCompleted,
 		layer2Manager:   layer2,
+		taskDefPath:     "task.json",
 	}
+}
+
+// WithTaskDefPath overrides the path to the Layer 2 workflow definition JSON.
+// Useful when running from a directory that isn't the repo root.
+func (tm *TaskManager) WithTaskDefPath(path string) *TaskManager {
+	tm.taskDefPath = path
+	return tm
 }
 
 // StartTask is called by the Layer 1 engine when it activates a TASK node.
@@ -45,16 +65,10 @@ func (tm *TaskManager) StartTask(payload engine.TaskPayload) error {
 	taskID := "task-" + uuid.New().String()[:8]
 	layer2WorkflowID := "layer2-" + taskID
 
-	// Map Layer 1 inputs into the namespaced Data map.
-	// e.g. input_mapping: {"applicant_name": "userform.applicant_name"}
-	// payload.Inputs holds the already-mapped values from the engine.
 	initialData := make(map[string]any)
-	// The engine applies input_mapping before calling us, so payload.Inputs
-	// contains keys like "userform.applicant_name". We need to expand the dot-path.
 	for k, v := range payload.Inputs {
 		setNestedKey(initialData, k, v)
 	}
-	// Embed the task ID so Layer 2 activities can reference it
 	initialData["_task_id"] = taskID
 
 	record := store.TaskRecord{
@@ -66,7 +80,6 @@ func (tm *TaskManager) StartTask(payload engine.TaskPayload) error {
 		Layer1WorkflowID: payload.WorkflowID,
 		Layer1RunID:      payload.RunID,
 		Layer1NodeID:     payload.NodeID,
-		// Set Layer2WorkflowID now so HandleTask can find this record immediately
 		Layer2WorkflowID: layer2WorkflowID,
 		Data:             initialData,
 		CreatedAt:        time.Now(),
@@ -74,14 +87,13 @@ func (tm *TaskManager) StartTask(payload engine.TaskPayload) error {
 	tm.db.SaveTask(record)
 	log.Printf("[TaskManager] Created Task record %s (template=%s)", taskID, payload.TaskTemplateID)
 
-	// Load task.json as the Layer 2 WorkflowDefinition
-	fileBytes, err := os.ReadFile("task.json")
+	fileBytes, err := os.ReadFile(tm.taskDefPath)
 	if err != nil {
-		return fmt.Errorf("failed to read task.json: %v", err)
+		return fmt.Errorf("failed to read %s: %v", tm.taskDefPath, err)
 	}
 	var def engine.WorkflowDefinition
 	if err := json.Unmarshal(fileBytes, &def); err != nil {
-		return fmt.Errorf("failed to parse task.json: %v", err)
+		return fmt.Errorf("failed to parse %s: %v", tm.taskDefPath, err)
 	}
 
 	err = tm.layer2Manager.StartWorkflow(context.Background(), layer2WorkflowID, def, initialData)
@@ -95,17 +107,14 @@ func (tm *TaskManager) StartTask(payload engine.TaskPayload) error {
 // HandleTask is called by the Layer 2 engine when it activates a TASK node inside the sub-workflow.
 // It routes to the correct capability handler based on task_template_id.
 func (tm *TaskManager) HandleTask(payload engine.TaskPayload) error {
-	// Layer2WorkflowID is stored in the DB record at StartTask time, so this lookup always works.
 	record, exists := tm.db.GetTaskByLayer2WorkflowID(payload.WorkflowID)
 	if !exists {
 		return fmt.Errorf("[HandleTask] no task record found for Layer 2 workflow %s", payload.WorkflowID)
 	}
 
-	// Update active coordinates for this step
 	record.Layer2RunID = payload.RunID
 	record.ActiveActivityID = payload.NodeID
 
-	// Merge any new data from the node inputs into our namespaced Data map
 	for k, v := range payload.Inputs {
 		setNestedKey(record.Data, k, v)
 	}
@@ -117,7 +126,7 @@ func (tm *TaskManager) HandleTask(payload engine.TaskPayload) error {
 
 	case "generic_external_review":
 		record.Status = "QUEUED_EXTERNALLY"
-		// Call the external API to queue the application form request in the external system.
+		// In a real implementation, call the external API here before returning.
 		log.Printf("[TaskManager] Task %s dispatched to external reviewer at node %s", record.TaskID, payload.NodeID)
 
 	default:
@@ -129,7 +138,7 @@ func (tm *TaskManager) HandleTask(payload engine.TaskPayload) error {
 }
 
 // HandleLayer2Completion is called when a Layer 2 workflow hits its END node.
-// It uses the stored Layer 1 parent coordinates to wake up the macro journey.
+// It marks the task complete and fires the onTaskCompleted callback to resume Layer 1.
 func (tm *TaskManager) HandleLayer2Completion(workflowID string, finalVariables map[string]any) error {
 	record, exists := tm.db.GetTaskByLayer2WorkflowID(workflowID)
 	if !exists {
@@ -142,10 +151,6 @@ func (tm *TaskManager) HandleLayer2Completion(workflowID string, finalVariables 
 	record.Status = "COMPLETED"
 	tm.db.SaveTask(record)
 
-	// Extract the mapped output for Layer 1 from the final global state.
-	// The output_mapping in workflow.json maps "reviewerform.review_outcome" -> "phase1_outcome".
-	// The engine handles this mapping before calling the completion handler,
-	// so finalVariables should already contain the mapped keys.
 	err := tm.onTaskCompleted(record.Layer1WorkflowID, record.Layer1RunID, record.Layer1NodeID, finalVariables)
 	if err != nil {
 		log.Printf("[TaskManager] Failed to execute task completion callback for %s: %v", record.TaskID, err)
@@ -156,21 +161,21 @@ func (tm *TaskManager) HandleLayer2Completion(workflowID string, finalVariables 
 	return nil
 }
 
+// GetDB returns the underlying task store, needed by the HTTP server.
 func (tm *TaskManager) GetDB() *store.TaskDB {
 	return tm.db
 }
 
+// GetLayer2Manager returns the Layer 2 TemporalManager, needed by the HTTP server to wake activities.
 func (tm *TaskManager) GetLayer2Manager() engine.TemporalManager {
 	return tm.layer2Manager
 }
 
 // setNestedKey sets a value in a map using a dot-separated path.
-// e.g. setNestedKey(m, "userform.applicant_name", "Acme") sets m["userform"]["applicant_name"] = "Acme"
 func setNestedKey(m map[string]any, dotPath string, value any) {
 	if dotPath == "" {
 		return
 	}
-	// Find the first dot
 	for i := 0; i < len(dotPath); i++ {
 		if dotPath[i] == '.' {
 			key := dotPath[:i]
@@ -188,6 +193,5 @@ func setNestedKey(m map[string]any, dotPath string, value any) {
 			return
 		}
 	}
-	// No dot found — leaf key
 	m[dotPath] = value
 }

@@ -1,4 +1,4 @@
-package api
+package main
 
 import (
 	"context"
@@ -11,26 +11,28 @@ import (
 	"time"
 
 	engine "github.com/OpenNSW/go-temporal-workflow"
-	"github.com/OpenNSW/nsw-task-flow/internal/orchestrator"
+	"github.com/OpenNSW/nsw-task-flow/orchestrator"
 )
 
-type Server struct {
+type server struct {
 	manager       *orchestrator.TaskManager
 	layer1Manager engine.TemporalManager
 }
 
-func NewServer(manager *orchestrator.TaskManager, layer1Manager engine.TemporalManager) *Server {
-	return &Server{manager: manager, layer1Manager: layer1Manager}
+func newServer(manager *orchestrator.TaskManager, layer1Manager engine.TemporalManager) *server {
+	return &server{manager: manager, layer1Manager: layer1Manager}
 }
 
-func (s *Server) Start(addr string) {
-	// Serve static files
-	http.Handle("/", http.FileServer(http.Dir("./static")))
+func (s *server) start(addr string) {
+	// Serve the demo UI from demo/static/
+	http.Handle("/", http.FileServer(http.Dir("./demo/static")))
+
+	// Serve JSONForms schema files from demo/static/forms/
+	http.Handle("/forms/", http.StripPrefix("/forms/", http.FileServer(http.Dir("./demo/static/forms"))))
 
 	// API endpoints
 	http.HandleFunc("/api/tasks", s.handleGetTasks)
 	http.HandleFunc("/api/start", s.handleStartWorkflow)
-	// Unified task interaction endpoint: POST /api/task/{taskID}
 	http.HandleFunc("/api/task/", s.handleTaskInteraction)
 
 	log.Printf("[API] Starting HTTP server on %s...", addr)
@@ -41,44 +43,41 @@ func (s *Server) Start(addr string) {
 	}()
 }
 
-func (s *Server) handleGetTasks(w http.ResponseWriter, r *http.Request) {
+func (s *server) handleGetTasks(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(s.manager.GetDB().GetAllTasks())
+	json.NewEncoder(w).Encode(s.manager.GetDB().GetAllTasks()) //nolint:errcheck
 }
 
-func (s *Server) handleStartWorkflow(w http.ResponseWriter, r *http.Request) {
+func (s *server) handleStartWorkflow(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "POST only", http.StatusMethodNotAllowed)
 		return
 	}
 
-	// Accept an optional applicant_name to pre-fill the userform
 	var req struct {
 		ApplicantName string `json:"applicant_name"`
 	}
-	// Ignore decode errors — applicant_name is optional
 	json.NewDecoder(r.Body).Decode(&req) //nolint:errcheck
 
-	fileBytes, err := os.ReadFile("workflow.json")
+	fileBytes, err := os.ReadFile("demo/workflow.json")
 	if err != nil {
-		http.Error(w, "Failed to read workflow.json", http.StatusInternalServerError)
+		http.Error(w, "Failed to read demo/workflow.json", http.StatusInternalServerError)
 		return
 	}
 
 	var def engine.WorkflowDefinition
 	if err := json.Unmarshal(fileBytes, &def); err != nil {
-		http.Error(w, "Failed to parse workflow.json", http.StatusInternalServerError)
+		http.Error(w, "Failed to parse demo/workflow.json", http.StatusInternalServerError)
 		return
 	}
 
 	workflowID := "nsw-phyto-" + time.Now().Format("150405")
 	log.Printf("[API] Starting Layer 1 workflow %s (applicant=%s)", workflowID, req.ApplicantName)
 
-	initialVars := map[string]any{}
 	if req.ApplicantName == "" {
 		req.ApplicantName = "John Doe"
 	}
-	initialVars["applicant_name"] = req.ApplicantName
+	initialVars := map[string]any{"applicant_name": req.ApplicantName}
 
 	err = s.layer1Manager.StartWorkflow(context.Background(), workflowID, def, initialVars)
 	if err != nil {
@@ -88,18 +87,17 @@ func (s *Server) handleStartWorkflow(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]string{"status": "ok", "workflow_id": workflowID})
+	json.NewEncoder(w).Encode(map[string]string{"status": "ok", "workflow_id": workflowID}) //nolint:errcheck
 }
 
 // handleTaskInteraction is the unified endpoint: POST /api/task/{taskID}
 // It routes the payload to the correct Layer 2 activity using the stored ActiveActivityID.
-func (s *Server) handleTaskInteraction(w http.ResponseWriter, r *http.Request) {
+func (s *server) handleTaskInteraction(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "POST only", http.StatusMethodNotAllowed)
 		return
 	}
 
-	// Extract taskID from path: /api/task/{taskID}
 	taskID := strings.TrimPrefix(r.URL.Path, "/api/task/")
 	if taskID == "" {
 		http.Error(w, "missing task ID in path", http.StatusBadRequest)
@@ -126,7 +124,6 @@ func (s *Server) handleTaskInteraction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Merge submitted data into the stored namespaced Data map
 	if record.Data == nil {
 		record.Data = make(map[string]any)
 	}
@@ -135,7 +132,6 @@ func (s *Server) handleTaskInteraction(w http.ResponseWriter, r *http.Request) {
 	}
 	db.SaveTask(record)
 
-	// Wake up the exact Layer 2 activity using the stored coordinates
 	log.Printf("[API] Waking Layer 2 activity %s in workflow %s (task %s)",
 		record.ActiveActivityID, record.Layer2WorkflowID, taskID)
 
@@ -144,7 +140,7 @@ func (s *Server) handleTaskInteraction(w http.ResponseWriter, r *http.Request) {
 		record.Layer2WorkflowID,
 		record.Layer2RunID,
 		record.ActiveActivityID,
-		record.Data, // pass full namespaced state back to the workflow
+		record.Data,
 	)
 	if err != nil {
 		log.Printf("[API] Failed to wake Layer 2 activity: %v", err)
@@ -155,5 +151,5 @@ func (s *Server) handleTaskInteraction(w http.ResponseWriter, r *http.Request) {
 	log.Printf("[API] Task %s resumed successfully", taskID)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+	json.NewEncoder(w).Encode(map[string]string{"status": "ok"}) //nolint:errcheck
 }
