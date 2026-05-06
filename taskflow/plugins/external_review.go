@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"time"
@@ -13,16 +14,12 @@ import (
 // HTTPDispatcher defines the function signature for executing external system integrations.
 type HTTPDispatcher func(ctx context.Context, url string, taskID string, payload map[string]any) error
 
-// DefaultHTTPDispatcher makes a real HTTP POST request containing the task ID and namespaced task payload.
+// DefaultHTTPDispatcher sends the payload as-is with no envelope.
+// Callers that need a specific request shape should provide a custom dispatcher.
 func DefaultHTTPDispatcher(ctx context.Context, url string, taskID string, payload map[string]any) error {
-	bodyMap := map[string]any{
-		"task_id": taskID,
-		"data":    payload,
-	}
-
-	bodyBytes, err := json.Marshal(bodyMap)
+	bodyBytes, err := json.Marshal(payload)
 	if err != nil {
-		return fmt.Errorf("failed to marshal dispatch request: %w", err)
+		return fmt.Errorf("failed to marshal dispatch payload: %w", err)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(bodyBytes))
@@ -30,16 +27,18 @@ func DefaultHTTPDispatcher(ctx context.Context, url string, taskID string, paylo
 		return fmt.Errorf("failed to create http request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Task-ID", taskID) // carry task ID as a header, not in the body
 
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		return fmt.Errorf("failed to execute external http request: %w", err)
+		return fmt.Errorf("http dispatch failed: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("external review system returned non-success code: %d", resp.StatusCode)
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
+		return fmt.Errorf("external system returned %d: %s", resp.StatusCode, body)
 	}
 
 	return nil
