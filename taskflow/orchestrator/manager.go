@@ -55,12 +55,16 @@ Flow Diagram:
               [Resume Parent Workflow]
 */
 
+// TaskCompletedCallback is a callback function invoked when a Task workflow completes.
+// It is typically used to wake up the parent workflow with the final task output variables.
+type TaskCompletedCallback func(parentWorkflowID string, parentRunID string, parentNodeID string, finalVariables map[string]any) error
+
 // TaskManager orchestrates decoupled tasks and interactions under parent workflows.
 // It bridges macro-level workflows and micro-level interactive tasks via a single DB entry per task.
 type TaskManager struct {
 	db                  store.TaskStore
 	registry            *TaskTemplateRegistry
-	onTaskCompleted     func(parentWorkflowID string, parentRunID string, parentNodeID string, finalVariables map[string]any) error
+	onTaskCompleted     TaskCompletedCallback
 	taskWorkflowManager engine.TemporalManager
 	taskDefPath         string
 }
@@ -76,7 +80,7 @@ func NewTaskManager(
 	db store.TaskStore,
 	registry *TaskTemplateRegistry,
 	taskWorkflowManager engine.TemporalManager,
-	onTaskCompleted func(parentWorkflowID string, parentRunID string, parentNodeID string, finalVariables map[string]any) error,
+	onTaskCompleted TaskCompletedCallback,
 ) *TaskManager {
 	return &TaskManager{
 		db:                  db,
