@@ -3,6 +3,7 @@ package orchestrator
 import (
 	"context"
 	"errors"
+	"os"
 	"testing"
 
 	engine "github.com/OpenNSW/go-temporal-workflow"
@@ -42,6 +43,14 @@ func (m *mockTemporalManager) StopWorker() {
 	if m.stopWorkerFunc != nil {
 		m.stopWorkerFunc()
 	}
+}
+
+func (m *mockTemporalManager) TaskUpdate(ctx context.Context, workflowID, runID string, update engine.UpdateEvent) error {
+	return nil
+}
+
+func (m *mockTemporalManager) GetStatus(ctx context.Context, workflowID string) (*engine.WorkflowInstance, error) {
+	return nil, nil
 }
 
 // mockTaskStore implements store.TaskStore for unit testing
