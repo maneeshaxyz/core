@@ -45,16 +45,11 @@ func main() {
 		log.Fatalln("Failed to register user input plugin:", err)
 	}
 
-	// Resilient demo HTTP dispatcher: attempts a real HTTP POST request to the external URL,
-	// but gracefully falls back to successful local mock behavior if the external service is offline.
+	// Pure local demo dispatcher: avoids external HTTP calls to keep the demo self-contained
+	// and fast. The Task's status transitions to QUEUED_EXTERNALLY, allowing the local reviewer
+	// dashboard to query it and submit responses locally.
 	demoDispatcher := func(ctx context.Context, url string, taskID string, payload map[string]any) error {
-		log.Printf("[Demo HTTP Dispatcher] Attempting real dispatch to: %s", url)
-		err := plugins.DefaultHTTPDispatcher(ctx, url, taskID, payload)
-		if err != nil {
-			log.Printf("[Demo HTTP Dispatcher] WARNING: Real dispatch failed (%v). Falling back to local demo mock mode.", err)
-		} else {
-			log.Printf("[Demo HTTP Dispatcher] Real dispatch succeeded!")
-		}
+		log.Printf("[Demo Dispatcher] Asynchronously queued task %s in local Reviewer dashboard queue (mock destination: %s). Waiting for reviewer action...", taskID, url)
 		return nil
 	}
 
