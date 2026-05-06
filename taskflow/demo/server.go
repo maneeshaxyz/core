@@ -91,7 +91,7 @@ func (s *server) handleStartWorkflow(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleTaskInteraction is the unified endpoint: POST /api/task/{taskID}
-// It routes the payload to the correct active Task workflow activity using the stored ActiveActivityID.
+// It routes the payload to the correct active Task workflow activity using the stored SubTaskNodeID.
 func (s *server) handleTaskInteraction(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "POST only", http.StatusMethodNotAllowed)

@@ -169,7 +169,7 @@ func (tm *TaskManager) StartSubTask(payload engine.TaskPayload) error {
 	}
 
 	record.TaskRunID = payload.RunID
-	record.ActiveActivityID = payload.NodeID
+	record.SubTaskNodeID = payload.NodeID
 
 	for k, v := range payload.Inputs {
 		setNestedKey(record.Data, k, v)
@@ -258,13 +258,13 @@ func (tm *TaskManager) CompleteTaskStep(ctx context.Context, taskID string, payl
 	tm.db.SaveTask(record)
 
 	log.Printf("[TaskManager] Waking active activity %s in workflow %s (task %s)",
-		record.ActiveActivityID, record.TaskWorkflowID, taskID)
+		record.SubTaskNodeID, record.TaskWorkflowID, taskID)
 
 	err := tm.taskWorkflowManager.TaskDone(
 		ctx,
 		record.TaskWorkflowID,
 		record.TaskRunID,
-		record.ActiveActivityID,
+		record.SubTaskNodeID,
 		record.Data, // pass full namespaced state back to the workflow
 	)
 	if err != nil {
