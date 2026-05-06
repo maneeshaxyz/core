@@ -33,7 +33,7 @@ func main() {
 
 	// 2. Store & Task Template Registry
 	// Templates are loaded from ./demo/templates/*.json — add a new file to register a new flow.
-	db := store.NewTaskDB()
+	db := NewTaskDB()
 	registry := orchestrator.NewTaskTemplateRegistry()
 	if err := loadTemplates(registry, "demo/templates"); err != nil {
 		log.Fatalln("Failed to load task template registry:", err)

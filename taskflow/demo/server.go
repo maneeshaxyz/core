@@ -45,7 +45,7 @@ func (s *server) start(addr string) {
 
 func (s *server) handleGetTasks(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(s.manager.GetDB().GetAllTasks()) //nolint:errcheck
+	json.NewEncoder(w).Encode(s.manager.GetAllTasks()) //nolint:errcheck
 }
 
 func (s *server) handleStartWorkflow(w http.ResponseWriter, r *http.Request) {
@@ -104,18 +104,6 @@ func (s *server) handleTaskInteraction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	db := s.manager.GetDB()
-	record, exists := db.GetTask(taskID)
-	if !exists {
-		http.Error(w, "task not found", http.StatusNotFound)
-		return
-	}
-
-	if record.Status == "COMPLETED" {
-		http.Error(w, "task already completed", http.StatusConflict)
-		return
-	}
-
 	// The payload from the UI is a namespaced map matching the JSONForms structure,
 	// e.g. {"userform": {...}} or {"reviewerform": {...}}
 	var payload map[string]any
@@ -124,26 +112,17 @@ func (s *server) handleTaskInteraction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if record.Data == nil {
-		record.Data = make(map[string]any)
-	}
-	for k, v := range payload {
-		record.Data[k] = v
-	}
-	db.SaveTask(record)
-
-	log.Printf("[API] Waking Layer 2 activity %s in workflow %s (task %s)",
-		record.ActiveActivityID, record.Layer2WorkflowID, taskID)
-
-	err := s.manager.GetLayer2Manager().TaskDone(
-		context.Background(),
-		record.Layer2WorkflowID,
-		record.Layer2RunID,
-		record.ActiveActivityID,
-		record.Data,
-	)
+	err := s.manager.CompleteTaskStep(r.Context(), taskID, payload)
 	if err != nil {
-		log.Printf("[API] Failed to wake Layer 2 activity: %v", err)
+		if strings.Contains(err.Error(), "not found") {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		if strings.Contains(err.Error(), "already completed") {
+			http.Error(w, err.Error(), http.StatusConflict)
+			return
+		}
+		log.Printf("[API] Failed to complete task step: %v", err)
 		http.Error(w, "failed to resume workflow", http.StatusInternalServerError)
 		return
 	}

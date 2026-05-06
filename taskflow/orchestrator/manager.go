@@ -16,7 +16,7 @@ import (
 // TaskManager orchestrates the two-layer architecture described in the design doc.
 // It bridges Layer 1 (macro journey) and Layer 2 (micro flow) via a single DB entry per task.
 type TaskManager struct {
-	db       *store.TaskDB
+	db       store.TaskStore
 	registry *TaskTemplateRegistry
 	// onTaskCompleted is called when a Layer 2 sub-workflow finishes, to resume Layer 1.
 	onTaskCompleted func(layer1WorkflowID string, layer1RunID string, layer1NodeID string, finalVariables map[string]any) error
@@ -32,7 +32,7 @@ type TaskManager struct {
 //   - onTaskCompleted — callback invoked when a Layer 2 workflow completes;
 //     typically calls layer1Manager.TaskDone with the stored parent coordinates.
 func NewTaskManager(
-	db *store.TaskDB,
+	db store.TaskStore,
 	registry *TaskTemplateRegistry,
 	layer2 engine.TemporalManager,
 	onTaskCompleted func(layer1WorkflowID string, layer1RunID string, layer1NodeID string, finalVariables map[string]any) error,
@@ -161,12 +161,60 @@ func (tm *TaskManager) HandleLayer2Completion(workflowID string, finalVariables 
 	return nil
 }
 
-// GetDB returns the underlying task store, needed by the HTTP server.
-func (tm *TaskManager) GetDB() *store.TaskDB {
+// GetTask retrieves a single task record by its ID.
+func (tm *TaskManager) GetTask(taskID string) (store.TaskRecord, bool) {
+	return tm.db.GetTask(taskID)
+}
+
+// GetAllTasks retrieves all task records in the store.
+func (tm *TaskManager) GetAllTasks() []store.TaskRecord {
+	return tm.db.GetAllTasks()
+}
+
+// CompleteTaskStep is the public API for external clients or portals to submit form/interaction
+// data and resume the active step in the corresponding Layer 2 sub-workflow.
+func (tm *TaskManager) CompleteTaskStep(ctx context.Context, taskID string, payload map[string]any) error {
+	record, exists := tm.db.GetTask(taskID)
+	if !exists {
+		return fmt.Errorf("task %s not found", taskID)
+	}
+
+	if record.Status == "COMPLETED" {
+		return fmt.Errorf("task %s already completed", taskID)
+	}
+
+	// Merge submitted data into the stored namespaced Data map
+	if record.Data == nil {
+		record.Data = make(map[string]any)
+	}
+	for k, v := range payload {
+		record.Data[k] = v
+	}
+	tm.db.SaveTask(record)
+
+	log.Printf("[TaskManager] Waking Layer 2 activity %s in workflow %s (task %s)",
+		record.ActiveActivityID, record.Layer2WorkflowID, taskID)
+
+	err := tm.layer2Manager.TaskDone(
+		ctx,
+		record.Layer2WorkflowID,
+		record.Layer2RunID,
+		record.ActiveActivityID,
+		record.Data, // pass full namespaced state back to the workflow
+	)
+	if err != nil {
+		return fmt.Errorf("failed to resume Layer 2 workflow: %w", err)
+	}
+
+	return nil
+}
+
+// GetDB returns the underlying task store.
+func (tm *TaskManager) GetDB() store.TaskStore {
 	return tm.db
 }
 
-// GetLayer2Manager returns the Layer 2 TemporalManager, needed by the HTTP server to wake activities.
+// GetLayer2Manager returns the Layer 2 TemporalManager.
 func (tm *TaskManager) GetLayer2Manager() engine.TemporalManager {
 	return tm.layer2Manager
 }
