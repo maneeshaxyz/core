@@ -190,15 +190,15 @@ func TestTaskManager_Lifecycle(t *testing.T) {
 		t.Errorf("expected L1 workflow 'l1-workflow', got '%s'", task.Layer1WorkflowID)
 	}
 
-	// 2. HandleTask — generic_user_input
+	// 2. StartSubTask — generic_user_input
 	payloadL2 := engine.TaskPayload{
 		WorkflowID:     task.Layer2WorkflowID,
 		RunID:          "l2-run",
 		NodeID:         "l2-node",
 		TaskTemplateID: "generic_user_input",
 	}
-	if err := tm.HandleTask(payloadL2); err != nil {
-		t.Fatalf("HandleTask failed: %v", err)
+	if err := tm.StartSubTask(payloadL2); err != nil {
+		t.Fatalf("StartSubTask failed: %v", err)
 	}
 
 	task, _ = storeMock.GetTask(task.TaskID)
@@ -327,13 +327,13 @@ func TestStartTask_Layer2ManagerError(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// HandleTask — error paths
+// StartSubTask — error paths
 // ---------------------------------------------------------------------------
 
-func TestHandleTask_UnknownLayer2WorkflowID(t *testing.T) {
+func TestStartSubTask_UnknownLayer2WorkflowID(t *testing.T) {
 	tm := NewTaskManager(newSafeMockTaskStore(), newTestRegistry(), &mockTemporalManager{}, noopCallback)
 
-	err := tm.HandleTask(engine.TaskPayload{
+	err := tm.StartSubTask(engine.TaskPayload{
 		WorkflowID:     "workflow-that-was-never-registered",
 		TaskTemplateID: "generic_user_input",
 	})
@@ -342,7 +342,7 @@ func TestHandleTask_UnknownLayer2WorkflowID(t *testing.T) {
 	}
 }
 
-func TestHandleTask_UnknownTaskTemplateID(t *testing.T) {
+func TestStartSubTask_UnknownTaskTemplateID(t *testing.T) {
 	db := newSafeMockTaskStore()
 	db.SaveTask(store.TaskRecord{
 		TaskID:           "task-1",
@@ -353,16 +353,16 @@ func TestHandleTask_UnknownTaskTemplateID(t *testing.T) {
 
 	tm := NewTaskManager(db, newTestRegistry(), &mockTemporalManager{}, noopCallback)
 
-	err := tm.HandleTask(engine.TaskPayload{
+	err := tm.StartSubTask(engine.TaskPayload{
 		WorkflowID:     "l2-workflow-1",
 		TaskTemplateID: "not_a_real_template",
 	})
 	if err == nil {
-		t.Fatal("expected error for unknown task_template_id in HandleTask, got nil")
+		t.Fatal("expected error for unknown task_template_id in StartSubTask, got nil")
 	}
 }
 
-func TestHandleTask_ExternalReviewPath(t *testing.T) {
+func TestStartSubTask_ExternalReviewPath(t *testing.T) {
 	db := newSafeMockTaskStore()
 	db.SaveTask(store.TaskRecord{
 		TaskID:           "task-ext",
@@ -373,14 +373,14 @@ func TestHandleTask_ExternalReviewPath(t *testing.T) {
 
 	tm := NewTaskManager(db, newTestRegistry(), &mockTemporalManager{}, noopCallback)
 
-	err := tm.HandleTask(engine.TaskPayload{
+	err := tm.StartSubTask(engine.TaskPayload{
 		WorkflowID:     "l2-ext-workflow",
 		RunID:          "run-1",
 		NodeID:         "node-ext",
 		TaskTemplateID: "generic_external_review",
 	})
 	if err != nil {
-		t.Fatalf("HandleTask for generic_external_review failed: %v", err)
+		t.Fatalf("StartSubTask for generic_external_review failed: %v", err)
 	}
 
 	task, _ := db.GetTask("task-ext")

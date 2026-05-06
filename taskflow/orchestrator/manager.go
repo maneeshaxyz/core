@@ -104,12 +104,12 @@ func (tm *TaskManager) StartTask(payload engine.TaskPayload) error {
 	return nil
 }
 
-// HandleTask is called by the Layer 2 engine when it activates a TASK node inside the sub-workflow.
+// StartSubTask is called by the Layer 2 engine when it activates a TASK node inside the sub-workflow.
 // It routes to the correct capability handler based on task_template_id.
-func (tm *TaskManager) HandleTask(payload engine.TaskPayload) error {
+func (tm *TaskManager) StartSubTask(payload engine.TaskPayload) error {
 	record, exists := tm.db.GetTaskByLayer2WorkflowID(payload.WorkflowID)
 	if !exists {
-		return fmt.Errorf("[HandleTask] no task record found for Layer 2 workflow %s", payload.WorkflowID)
+		return fmt.Errorf("[StartSubTask] no task record found for Layer 2 workflow %s", payload.WorkflowID)
 	}
 
 	record.Layer2RunID = payload.RunID
