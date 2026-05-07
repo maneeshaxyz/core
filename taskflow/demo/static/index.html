@@ -616,7 +616,7 @@
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ applicant_name: name, workflow_type: wfType })
                 });
-                if (r.ok) { fetchTasks(); }
+                if (r.ok) { setTimeout(fetchTasks, 200); }
                 else { alert('Failed to start: ' + await r.text()); }
             } catch (e) { alert('Network error'); }
         }
@@ -635,7 +635,7 @@
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)
                 });
-                if (r.ok) { fetchTasks(); }
+                if (r.ok) { setTimeout(fetchTasks, 200); }
                 else { alert('Submit failed: ' + await r.text()); }
             } catch (e) { alert('Network error'); }
         }
@@ -680,7 +680,7 @@
                     title = "Application Officer Review";
                     badgeText = "Under Assessment";
                     badgeStyle = "background:rgba(210,153,34,0.12); color:#ddac22; border-color:rgba(210,153,34,0.3)";
-                    desc = "Your application has been safely received and is being verified by a National Single Window quarantine officer.";
+                    desc = "Your application has been safely received and is being verified by an NPQS officer.";
                     statusClass = "dot-warning";
                 } else if (nodeID.includes('sample') || nodeID.includes('wait_sample') || nodeID.includes('2-wait_on_sample')) {
                     title = "Consignment Sample Delivery";
