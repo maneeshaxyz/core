@@ -1197,6 +1197,7 @@
             const uf = d.userform || {};
             const rf = d.reviewerform || {};
             const tid = task.task_id;
+            const refNum = rf.reference_number || d.reference_number || (d.npqs ? d.npqs.reference_number : '') || '—';
 
             const card = document.createElement('div');
             card.className = 'task-card';
@@ -1218,7 +1219,7 @@
             <div style="font-size:0.85rem; display:flex; flex-direction:column; gap:0.25rem;">
                 <div>Exporter: <b>${uf.exporter_name || uf.applicant_name || '—'}</b></div>
                 <div>Commodity: <b>${uf.commodity || uf.crop_type || '—'}</b></div>
-                <div>Reference No: <b>${rf.reference_number || d.reference_number || '—'}</b></div>
+                <div>Reference No: <b>${refNum}</b></div>
             </div>
             <div class="queued-notice" style="background:rgba(159,122,234,0.07); border-color:rgba(159,122,234,0.2); color:#b794f4">
                 <span>📍 Physical sample is being shipped to NPQS Quarantine center.</span>
@@ -1240,6 +1241,7 @@
         <div class="card-body">
             <div class="section-label">Sample Info</div>
             <div style="font-size:0.85rem; display:flex; flex-direction:column; gap:0.25rem;">
+                <div>Reference No: <b>${refNum}</b></div>
                 <div>Sample Tag: <b>SMP-${tid.substr(0, 6).toUpperCase()}</b></div>
                 <div>Commodity: <b>${uf.commodity || uf.crop_type || '—'}</b></div>
             </div>
@@ -1267,8 +1269,9 @@
         </div>
         <div class="card-body">
             <div class="section-label">Consignment Details</div>
-            <div style="font-size:0.85rem;">
-                Commodity: <b>${uf.commodity || uf.crop_type || '—'}</b> (${uf.quantity || '—'} ${uf.quantity_unit || ''})
+            <div style="font-size:0.85rem; display:flex; flex-direction:column; gap:0.25rem; margin-bottom:0.4rem;">
+                <div>Reference No: <b>${refNum}</b></div>
+                <div>Commodity: <b>${uf.commodity || uf.crop_type || '—'}</b> (${uf.quantity || '—'} ${uf.quantity_unit || ''})</div>
             </div>
             <div class="queued-notice" style="background:rgba(210,153,34,0.07); border-color:rgba(210,153,34,0.2); color:var(--warning)">
                 <span>💨 Consignment must undergo Methyl Bromide fumigation treatment.</span>
@@ -1289,8 +1292,9 @@
         </div>
         <div class="card-body">
             <div class="section-label">Country Profile Risk Check</div>
-            <div style="font-size:0.85rem; margin-bottom:0.4rem;">
-                Destination: <b style="color:var(--cyan)">${uf.consignee_country || uf.export_destination || '—'}</b>
+            <div style="font-size:0.85rem; display:flex; flex-direction:column; gap:0.25rem; margin-bottom:0.4rem;">
+                <div>Reference No: <b>${refNum}</b></div>
+                <div>Destination: <b style="color:var(--cyan)">${uf.consignee_country || uf.export_destination || '—'}</b></div>
             </div>
             <div class="field">
                 <label>Is physical visual crop inspection required?</label>
@@ -1316,6 +1320,7 @@
         <div class="card-body">
             <div class="section-label">Inspection Target</div>
             <div style="font-size:0.85rem; display:flex; flex-direction:column; gap:0.25rem;">
+                <div>Reference No: <b>${refNum}</b></div>
                 <div>Location: <b>${uf.exporter_address || uf.farm_location || '—'}</b></div>
                 <div>Commodity: <b>${uf.commodity || uf.crop_type || '—'}</b></div>
             </div>
@@ -1341,6 +1346,7 @@
             <span class="badge badge-queued">Waiting</span>
         </div>
         <div class="card-body">
+            <div style="font-size:0.85rem; margin-bottom:0.5rem;">Reference No: <b>${refNum}</b></div>
             <div class="queued-notice">
                 <span>Waiting for external event to trigger task completion.</span>
             </div>
@@ -1360,6 +1366,7 @@
             <span class="badge badge-queued" style="color:var(--cyan); border-color:var(--cyan)">Pending Review</span>
         </div>
         <div class="card-body">
+            <div style="font-size:0.85rem; margin-bottom:0.5rem;">Reference No: <b>${refNum}</b></div>
             <div class="section-label">Submitted Files</div>
             <div style="background:var(--surface2); border:1px solid var(--border); border-radius:6px; padding:0.6rem; font-size:0.82rem; display:flex; flex-direction:column; gap:0.35rem;">
                 <div>📄 Bill of Lading: <a href="#" onclick="return false" style="color:var(--primary); text-decoration:none">${u_docs.bill_of_lading || 'bill_of_lading.pdf'}</a></div>
@@ -1396,6 +1403,7 @@
             <span class="badge badge-queued" style="background:rgba(63,185,80,0.1); color:var(--success)">Approved</span>
         </div>
         <div class="card-body">
+            <div style="font-size:0.85rem; margin-bottom:0.5rem;">Reference No: <b>${refNum}</b></div>
             <div class="queued-notice" style="background:rgba(63,185,80,0.05); border-color:rgba(63,185,80,0.2); color:var(--success)">
                 <span>All tests passed, payments cleared, and docs verified. Ready for issuance.</span>
             </div>
@@ -1418,7 +1426,7 @@
         <div class="card-top">
             <div>
                 <div class="card-title">Review: ${uf.exporter_name || uf.applicant_name || 'Application'}</div>
-                <div class="card-sub">${tid} · node: ${task.subtask_node_id || '—'}</div>
+                <div class="card-sub">${tid} · node: ${task.subtask_node_id || '—'}${refNum !== '—' ? ` · Ref: ${refNum}` : ''}</div>
             </div>
             <span class="badge badge-queued">Review Entry</span>
         </div>
