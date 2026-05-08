@@ -44,8 +44,19 @@ func loadTemplates(registry *orchestrator.TaskTemplateRegistry, templatesDir str
 			return nil
 		}
 
-		// If it's not a template or a sub-workflow, check if the JSON is malformed
-		if errTemplate != nil && errWorkflow != nil {
+		// 3. Try to unmarshal and register as a generic template (must have an "id" field at the top level)
+		var genericEntry struct {
+			ID string `json:"id"`
+		}
+		errGeneric := json.Unmarshal(data, &genericEntry)
+		if errGeneric == nil && genericEntry.ID != "" {
+			registry.RegisterGenericTemplate(genericEntry.ID, data)
+			log.Printf("[Registry] Loaded generic JSON template: %s", genericEntry.ID)
+			return nil
+		}
+
+		// If it's not any of the above, check if the JSON is malformed
+		if errTemplate != nil && errWorkflow != nil && errGeneric != nil {
 			var raw map[string]any
 			if errRaw := json.Unmarshal(data, &raw); errRaw != nil {
 				log.Printf("[Registry] Warning: Invalid JSON syntax in file %s: %v", path, errRaw)

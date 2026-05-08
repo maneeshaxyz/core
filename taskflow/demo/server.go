@@ -45,7 +45,7 @@ func (s *server) start(addr string) {
 
 func (s *server) handleGetTasks(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(s.manager.GetAllTasks()) //nolint:errcheck
+	json.NewEncoder(w).Encode(s.manager.GetAllTasksRenderInfo()) //nolint:errcheck
 }
 
 func (s *server) handleStartWorkflow(w http.ResponseWriter, r *http.Request) {

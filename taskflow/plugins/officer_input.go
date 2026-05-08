@@ -3,6 +3,8 @@ package plugins
 import (
 	"encoding/json"
 	"log"
+
+	"github.com/OpenNSW/nsw-task-flow/store"
 )
 
 // OfficerInputPlugin implements a reviewer/officer action step.
@@ -40,4 +42,25 @@ func (p *OfficerInputPlugin) Execute(ctx PluginContext, configRaw json.RawMessag
 	ctx.Record.Status = status
 	log.Printf("[Plugin: generic_officer_input] Task %s waiting for officer interaction (form: %s) at node %s", ctx.Record.TaskID, ctx.Record.ReviewerFormID, ctx.Record.SubTaskNodeID)
 	return nil
+}
+
+func (p *OfficerInputPlugin) Render(configRaw json.RawMessage, record store.TaskRecord, getTemplate TemplateRetriever) (map[string]any, error) {
+	var cfg OfficerInputConfig
+	if len(configRaw) > 0 && string(configRaw) != "null" {
+		_ = json.Unmarshal(configRaw, &cfg)
+	}
+
+	renderInfo := map[string]any{
+		"form_type": "officer_input",
+	}
+
+	if cfg.OfficerJsonFormsID != "" {
+		if raw, exists := getTemplate(cfg.OfficerJsonFormsID); exists {
+			var decoded map[string]any
+			if err := json.Unmarshal(raw, &decoded); err == nil {
+				renderInfo["officer_form_schema"] = decoded
+			}
+		}
+	}
+	return renderInfo, nil
 }

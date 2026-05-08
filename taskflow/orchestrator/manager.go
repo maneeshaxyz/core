@@ -183,6 +183,7 @@ func (tm *TaskManager) StartSubTask(payload engine.TaskPayload) error {
 
 	record.TaskRunID = payload.RunID
 	record.SubTaskNodeID = payload.NodeID
+	record.ActiveTaskTemplateID = payload.TaskTemplateID
 
 	for k, v := range payload.Inputs {
 		setNestedKey(record.Data, k, v)
@@ -325,4 +326,78 @@ func setNestedKey(m map[string]any, dotPath string, value any) {
 		}
 	}
 	m[dotPath] = value
+}
+
+// GetTaskRenderInfo retrieves a task record and dynamically decorates it with rich render metadata
+// (like JSON schemas) fetched on-the-fly from its executing plugin.
+func (tm *TaskManager) GetTaskRenderInfo(taskID string) (map[string]any, error) {
+	record, exists := tm.db.GetTask(taskID)
+	if !exists {
+		return nil, fmt.Errorf("task record %s not found", taskID)
+	}
+
+	// Base render info matching the database record
+	res := map[string]any{
+		"task_id":                 record.TaskID,
+		"task_type":               record.TaskType,
+		"user_form_id":            record.UserFormID,
+		"reviewer_form_id":        record.ReviewerFormID,
+		"status":                  record.Status,
+		"parent_workflow_id":      record.ParentWorkflowID,
+		"parent_run_id":           record.ParentRunID,
+		"parent_node_id":          record.ParentNodeID,
+		"task_workflow_id":        record.TaskWorkflowID,
+		"task_run_id":             record.TaskRunID,
+		"subtask_node_id":         record.SubTaskNodeID,
+		"active_task_template_id": record.ActiveTaskTemplateID,
+		"data":                    record.Data,
+		"created_at":              record.CreatedAt,
+	}
+
+	// If there is an active subtask, fetch its template and let the plugin contribute render schemas/info
+	if record.ActiveTaskTemplateID != "" {
+		if regEntry, ok := tm.registry.Get(record.ActiveTaskTemplateID); ok {
+			if plugin, ok := tm.pluginsRegistry.Get(regEntry.TaskType, regEntry.PluginName); ok {
+				if renderable, ok := plugin.(plugins.RenderableTaskPlugin); ok {
+					getGenericTemplateFunc := func(id string) (json.RawMessage, bool) {
+						return tm.registry.GetGenericTemplate(id)
+					}
+					pluginInfo, err := renderable.Render(regEntry.PluginProperties, record, getGenericTemplateFunc)
+					if err == nil && pluginInfo != nil {
+						for k, v := range pluginInfo {
+							res[k] = v
+						}
+					} else if err != nil {
+						log.Printf("[TaskManager] Render warning on task %s (plugin %s): %v", taskID, regEntry.PluginName, err)
+					}
+				}
+			}
+		}
+	}
+
+	return res, nil
+}
+
+// GetAllTasksRenderInfo retrieves all tasks in the store and decorates each of them with dynamic render info.
+func (tm *TaskManager) GetAllTasksRenderInfo() []map[string]any {
+	records := tm.db.GetAllTasks()
+	resList := make([]map[string]any, 0, len(records))
+	for _, r := range records {
+		info, err := tm.GetTaskRenderInfo(r.TaskID)
+		if err == nil {
+			resList = append(resList, info)
+		} else {
+			// Fallback to basic record mapping on error
+			resList = append(resList, map[string]any{
+				"task_id":          r.TaskID,
+				"task_type":        r.TaskType,
+				"user_form_id":     r.UserFormID,
+				"reviewer_form_id": r.ReviewerFormID,
+				"status":           r.Status,
+				"data":             r.Data,
+				"created_at":       r.CreatedAt,
+			})
+		}
+	}
+	return resList
 }

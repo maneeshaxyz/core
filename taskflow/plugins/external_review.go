@@ -9,6 +9,8 @@ import (
 	"log"
 	"net/http"
 	"time"
+
+	"github.com/OpenNSW/nsw-task-flow/store"
 )
 
 // HTTPDispatcher defines the function signature for executing external system integrations.
@@ -93,4 +95,25 @@ func (p *ExternalReviewPlugin) Execute(ctx PluginContext, configRaw json.RawMess
 
 	log.Printf("[Plugin: generic_external_review] Successfully dispatched task %s (active step: %s, form: %s)", ctx.Record.TaskID, ctx.Record.SubTaskNodeID, ctx.Record.ReviewerFormID)
 	return nil
+}
+
+func (p *ExternalReviewPlugin) Render(configRaw json.RawMessage, record store.TaskRecord, getTemplate TemplateRetriever) (map[string]any, error) {
+	var cfg ExternalReviewConfig
+	if len(configRaw) > 0 && string(configRaw) != "null" {
+		_ = json.Unmarshal(configRaw, &cfg)
+	}
+
+	renderInfo := map[string]any{
+		"form_type": "external_review",
+	}
+
+	if cfg.ReviewerJsonFormsID != "" {
+		if raw, exists := getTemplate(cfg.ReviewerJsonFormsID); exists {
+			var decoded map[string]any
+			if err := json.Unmarshal(raw, &decoded); err == nil {
+				renderInfo["reviewer_form_schema"] = decoded
+			}
+		}
+	}
+	return renderInfo, nil
 }

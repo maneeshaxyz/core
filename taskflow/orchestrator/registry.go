@@ -19,16 +19,18 @@ type TaskTemplateEntry struct {
 
 // TaskTemplateRegistry is a simple in-process registry mapping template IDs to their config.
 type TaskTemplateRegistry struct {
-	entries   map[string]TaskTemplateEntry
-	workflows map[string]engine.WorkflowDefinition
+	entries          map[string]TaskTemplateEntry
+	workflows        map[string]engine.WorkflowDefinition
+	genericTemplates map[string]json.RawMessage
 }
 
 // NewTaskTemplateRegistry returns an empty registry.
 // Call Register to add templates, or use NewTaskTemplateRegistryFromDir to load from JSON files.
 func NewTaskTemplateRegistry() *TaskTemplateRegistry {
 	return &TaskTemplateRegistry{
-		entries:   make(map[string]TaskTemplateEntry),
-		workflows: make(map[string]engine.WorkflowDefinition),
+		entries:          make(map[string]TaskTemplateEntry),
+		workflows:        make(map[string]engine.WorkflowDefinition),
+		genericTemplates: make(map[string]json.RawMessage),
 	}
 }
 
@@ -48,4 +50,13 @@ func (r *TaskTemplateRegistry) RegisterWorkflow(def engine.WorkflowDefinition) {
 func (r *TaskTemplateRegistry) GetWorkflow(id string) (engine.WorkflowDefinition, bool) {
 	def, ok := r.workflows[id]
 	return def, ok
+}
+
+func (r *TaskTemplateRegistry) RegisterGenericTemplate(id string, raw json.RawMessage) {
+	r.genericTemplates[id] = raw
+}
+
+func (r *TaskTemplateRegistry) GetGenericTemplate(id string) (json.RawMessage, bool) {
+	raw, ok := r.genericTemplates[id]
+	return raw, ok
 }
