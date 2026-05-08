@@ -20,9 +20,13 @@
                 "type": "boolean",
                 "title": "Sample Testing Required?"
             },
+            "fumigation_required": {
+                "type": "boolean",
+                "title": "Fumigation Treatment Required?"
+            },
             "rejection_reason": {
                 "type": "string",
-                "title": "Reason"
+                "title": "Reason / Comments"
             }
         },
         "required": [
@@ -38,7 +42,8 @@
         "then": {
             "required": [
                 "reference_number",
-                "sample_required"
+                "sample_required",
+                "fumigation_required"
             ]
         }
     },
@@ -77,21 +82,22 @@
             },
             {
                 "type": "Control",
-                "scope": "#/properties/rejection_reason",
-                "options": {
-                    "multi": true
-                },
+                "scope": "#/properties/fumigation_required",
                 "rule": {
                     "effect": "SHOW",
                     "condition": {
                         "scope": "#/properties/review_outcome",
                         "schema": {
-                            "enum": [
-                                "reject",
-                                "needs_more_info"
-                            ]
+                            "const": "approve"
                         }
                     }
+                }
+            },
+            {
+                "type": "Control",
+                "scope": "#/properties/rejection_reason",
+                "options": {
+                    "multi": true
                 }
             }
         ]
