@@ -56,15 +56,10 @@ func (s *server) handleStartWorkflow(w http.ResponseWriter, r *http.Request) {
 
 	var req struct {
 		ApplicantName string `json:"applicant_name"`
-		WorkflowType  string `json:"workflow_type"` // "classic" or "npqs"
 	}
 	json.NewDecoder(r.Body).Decode(&req) //nolint:errcheck
 
 	filePath := "demo/templates/graphs/workflow_phyto_journey.json"
-	if req.WorkflowType == "npqs" {
-		filePath = "demo/templates/npqs/npqs_workflow.json"
-	}
-
 	fileBytes, err := os.ReadFile(filePath)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to read %s", filePath), http.StatusInternalServerError)
