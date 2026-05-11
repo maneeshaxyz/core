@@ -65,6 +65,7 @@ func (p *OfficerInputPlugin) Render(configRaw json.RawMessage, record store.Task
 			return nil, fmt.Errorf("failed to unmarshal officer json form template %q: %w", cfg.OfficerJsonFormsID, err)
 		}
 		renderInfo["officer_form_schema"] = decoded
+		renderInfo["officer_form_id"] = cfg.OfficerJsonFormsID
 	}
 	return renderInfo, nil
 }

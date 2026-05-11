@@ -349,8 +349,6 @@ func (tm *TaskManager) GetTaskRenderInfo(taskID string) (map[string]any, error) 
 	res := map[string]any{
 		"task_id":                 record.TaskID,
 		"task_type":               record.TaskType,
-		"user_form_id":            record.UserFormID,
-		"reviewer_form_id":        record.ReviewerFormID,
 		"status":                  record.Status,
 		"parent_workflow_id":      record.ParentWorkflowID,
 		"parent_run_id":           record.ParentRunID,
@@ -379,8 +377,6 @@ func (tm *TaskManager) GetTaskRenderInfo(taskID string) (map[string]any, error) 
 					} else if err != nil {
 						log.Printf("[TaskManager] Render warning on task %s (plugin %s): %v", taskID, regEntry.PluginName, err)
 					}
-				} else {
-					log.Printf("[TaskManager] Warning: plugin %s (task type: %s) for task %s is not renderable", regEntry.PluginName, regEntry.TaskType, taskID)
 				}
 			} else {
 				log.Printf("[TaskManager] Warning: plugin %s (task type: %s) not found in plugins registry for task %s", regEntry.PluginName, regEntry.TaskType, taskID)

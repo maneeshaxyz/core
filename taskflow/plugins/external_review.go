@@ -31,6 +31,7 @@ func (p *ExternalReviewPlugin) Name() string {
 type ExternalReviewConfig struct {
 	ExternalURL         string `json:"external_url"`
 	ReviewerJsonFormsID string `json:"reviewer_jsonforms_id,omitempty"`
+	UserJsonFormsID     string `json:"user_jsonforms_id,omitempty"`
 }
 
 func (p *ExternalReviewPlugin) Execute(ctx PluginContext, configRaw json.RawMessage) error {
@@ -79,6 +80,21 @@ func (p *ExternalReviewPlugin) Render(configRaw json.RawMessage, record store.Ta
 			return nil, fmt.Errorf("failed to unmarshal reviewer json form template %q: %w", cfg.ReviewerJsonFormsID, err)
 		}
 		renderInfo["reviewer_form_schema"] = decoded
+		renderInfo["reviewer_form_id"] = cfg.ReviewerJsonFormsID
 	}
+
+	if cfg.UserJsonFormsID != "" {
+		raw, exists := getTemplate(cfg.UserJsonFormsID)
+		if !exists {
+			return nil, fmt.Errorf("user json form template %q not found", cfg.UserJsonFormsID)
+		}
+		var decoded map[string]any
+		if err := json.Unmarshal(raw, &decoded); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal user json form template %q: %w", cfg.UserJsonFormsID, err)
+		}
+		renderInfo["user_form_schema"] = decoded
+		renderInfo["user_form_id"] = cfg.UserJsonFormsID
+	}
+
 	return renderInfo, nil
 }

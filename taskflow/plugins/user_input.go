@@ -21,8 +21,9 @@ func (p *UserInputPlugin) Name() string {
 
 // UserInputConfig holds properties specific to the user input step
 type UserInputConfig struct {
-	StatusOverride  string `json:"status_override,omitempty"`
-	UserJsonFormsID string `json:"user_jsonforms_id,omitempty"`
+	StatusOverride      string `json:"status_override,omitempty"`
+	UserJsonFormsID     string `json:"user_jsonforms_id,omitempty"`
+	ReviewerJsonFormsID string `json:"reviewer_jsonforms_id,omitempty"`
 }
 
 func (p *UserInputPlugin) Execute(ctx PluginContext, configRaw json.RawMessage) error {
@@ -64,7 +65,21 @@ func (p *UserInputPlugin) Render(configRaw json.RawMessage, record store.TaskRec
 		if err := json.Unmarshal(raw, &decoded); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal user json form template %q: %w", cfg.UserJsonFormsID, err)
 		}
+		renderInfo["user_form_id"] = cfg.UserJsonFormsID
 		renderInfo["user_form_schema"] = decoded
+	}
+
+	if cfg.ReviewerJsonFormsID != "" {
+		raw, exists := getTemplate(cfg.ReviewerJsonFormsID)
+		if !exists {
+			return nil, fmt.Errorf("reviewer json form template %q not found", cfg.ReviewerJsonFormsID)
+		}
+		var decoded map[string]any
+		if err := json.Unmarshal(raw, &decoded); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal reviewer json form template %q: %w", cfg.ReviewerJsonFormsID, err)
+		}
+		renderInfo["reviewer_form_schema"] = decoded
+		renderInfo["reviewer_form_id"] = cfg.ReviewerJsonFormsID
 	}
 	return renderInfo, nil
 }
