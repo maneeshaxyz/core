@@ -1,6 +1,7 @@
 package store
 
 import (
+	"context"
 	"encoding/json"
 	"time"
 )
@@ -36,8 +37,8 @@ type TaskRecord struct {
 
 // TaskStore is an interface that any persistent or in-memory database used by the TaskManager should implement.
 type TaskStore interface {
-	SaveTask(record TaskRecord)
-	GetTask(taskID string) (TaskRecord, bool)
-	GetTaskByWorkflowID(workflowID string) (TaskRecord, bool)
-	GetAllTasks() []TaskRecord
+	SaveTask(context context.Context, record TaskRecord)
+	GetTask(context context.Context, taskID string) (TaskRecord, bool)
+	GetTaskByWorkflowID(context context.Context, workflowID string) (TaskRecord, bool)
+	GetAllTasks(context context.Context) []TaskRecord
 }

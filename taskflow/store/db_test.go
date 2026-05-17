@@ -1,6 +1,7 @@
 package store
 
 import (
+	"context"
 	"testing"
 	"time"
 )
@@ -10,16 +11,16 @@ type testStore struct {
 	tasks map[string]TaskRecord
 }
 
-func (t *testStore) SaveTask(record TaskRecord) {
+func (t *testStore) SaveTask(_ context.Context, record TaskRecord) {
 	t.tasks[record.TaskID] = record
 }
 
-func (t *testStore) GetTask(taskID string) (TaskRecord, bool) {
+func (t *testStore) GetTask(_ context.Context, taskID string) (TaskRecord, bool) {
 	record, ok := t.tasks[taskID]
 	return record, ok
 }
 
-func (t *testStore) GetTaskByWorkflowID(workflowID string) (TaskRecord, bool) {
+func (t *testStore) GetTaskByWorkflowID(_ context.Context, workflowID string) (TaskRecord, bool) {
 	for _, record := range t.tasks {
 		if record.TaskWorkflowID == workflowID {
 			return record, true
@@ -28,7 +29,7 @@ func (t *testStore) GetTaskByWorkflowID(workflowID string) (TaskRecord, bool) {
 	return TaskRecord{}, false
 }
 
-func (t *testStore) GetAllTasks() []TaskRecord {
+func (t *testStore) GetAllTasks(_ context.Context) []TaskRecord {
 	var list []TaskRecord
 	for _, record := range t.tasks {
 		list = append(list, record)
@@ -53,9 +54,10 @@ func TestTaskStoreInterface(t *testing.T) {
 		CreatedAt:        time.Now(),
 	}
 
-	store.SaveTask(record)
+	ctx := context.Background()
+	store.SaveTask(ctx, record)
 
-	fetched, ok := store.GetTask("test-1")
+	fetched, ok := store.GetTask(ctx, "test-1")
 	if !ok {
 		t.Fatal("Expected task to be fetched")
 	}
@@ -64,7 +66,7 @@ func TestTaskStoreInterface(t *testing.T) {
 		t.Errorf("Expected TaskType 'TEST', got %s", fetched.TaskType)
 	}
 
-	fetchedTaskWF, ok := store.GetTaskByWorkflowID("task-wf-1")
+	fetchedTaskWF, ok := store.GetTaskByWorkflowID(ctx, "task-wf-1")
 	if !ok {
 		t.Fatal("Expected task to be fetched by Task workflow ID")
 	}
@@ -72,7 +74,7 @@ func TestTaskStoreInterface(t *testing.T) {
 		t.Errorf("Expected TaskID 'test-1', got %s", fetchedTaskWF.TaskID)
 	}
 
-	all := store.GetAllTasks()
+	all := store.GetAllTasks(ctx)
 	if len(all) != 1 {
 		t.Errorf("Expected exactly 1 task record, got %d", len(all))
 	}

@@ -102,7 +102,7 @@ func main() {
 	taskCompletionHandler := func(workflowID string, finalVariables map[string]any) error {
 		log.Printf("\n[Task Workflow] Completed. Final state: %v\n", finalVariables)
 		if tm != nil {
-			return tm.HandleTaskCompletion(workflowID, finalVariables)
+			return tm.HandleTaskCompletion(context.Background(), workflowID, finalVariables)
 		}
 		return nil
 	}

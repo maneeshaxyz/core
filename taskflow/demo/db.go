@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"log"
 	"os"
@@ -47,21 +48,21 @@ func (db *TaskDB) saveToFile() {
 	}
 }
 
-func (db *TaskDB) SaveTask(record store.TaskRecord) {
+func (db *TaskDB) SaveTask(_ context.Context, record store.TaskRecord) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 	db.tasks[record.TaskID] = record
 	db.saveToFile()
 }
 
-func (db *TaskDB) GetTask(taskID string) (store.TaskRecord, bool) {
+func (db *TaskDB) GetTask(_ context.Context, taskID string) (store.TaskRecord, bool) {
 	db.mu.RLock()
 	defer db.mu.RUnlock()
 	record, exists := db.tasks[taskID]
 	return record, exists
 }
 
-func (db *TaskDB) GetTaskByWorkflowID(workflowID string) (store.TaskRecord, bool) {
+func (db *TaskDB) GetTaskByWorkflowID(_ context.Context, workflowID string) (store.TaskRecord, bool) {
 	db.mu.RLock()
 	defer db.mu.RUnlock()
 	for _, record := range db.tasks {
@@ -72,7 +73,7 @@ func (db *TaskDB) GetTaskByWorkflowID(workflowID string) (store.TaskRecord, bool
 	return store.TaskRecord{}, false
 }
 
-func (db *TaskDB) GetAllTasks() []store.TaskRecord {
+func (db *TaskDB) GetAllTasks(_ context.Context) []store.TaskRecord {
 	db.mu.RLock()
 	defer db.mu.RUnlock()
 	var list []store.TaskRecord

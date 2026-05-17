@@ -139,7 +139,7 @@ func (tm *TaskManager) StartTask(payload engine.TaskPayload) (map[string]any, er
 		Data:             initialData,
 		CreatedAt:        time.Now(),
 	}
-	tm.db.SaveTask(record)
+	tm.db.SaveTask(context.Background(), record)
 	log.Printf("[TaskManager] Created Task record %s (template=%s, type=%s)", taskID, payload.TaskTemplateID, template.Type)
 
 	// Verify that there are no parallel execution paths, as TaskRecord only stores coordinates for a single active subtask.
@@ -161,7 +161,7 @@ func (tm *TaskManager) StartTask(payload engine.TaskPayload) (map[string]any, er
 // StartSubTask is called by the Task's workflow engine when it activates an interaction step.
 // It routes to the correct capability handler dynamically from the plugin registry.
 func (tm *TaskManager) StartSubTask(payload engine.TaskPayload) (map[string]any, error) {
-	record, exists := tm.db.GetTaskByWorkflowID(payload.WorkflowID)
+	record, exists := tm.db.GetTaskByWorkflowID(context.Background(), payload.WorkflowID)
 	if !exists {
 		return nil, fmt.Errorf("[StartSubTask] no task record found for workflow %s", payload.WorkflowID)
 	}
@@ -195,14 +195,14 @@ func (tm *TaskManager) StartSubTask(payload engine.TaskPayload) (map[string]any,
 
 	err := plugin.Execute(pluginCtx, subTemplate.PluginProperties)
 	if errors.Is(err, plugins.ErrSuspended) {
-		tm.db.SaveTask(record)
+		tm.db.SaveTask(pluginCtx.Context, record)
 		return nil, activity.ErrResultPending
 	}
 	if err != nil {
 		return nil, fmt.Errorf("[StartSubTask] plugin for task type %q execution failed: %w", subTemplate.TaskType, err)
 	}
 
-	tm.db.SaveTask(record)
+	tm.db.SaveTask(pluginCtx.Context, record)
 
 	// Otherwise, this step completed synchronously. Return its modified payload immediately to transition directly.
 	return record.Data, nil
@@ -210,8 +210,8 @@ func (tm *TaskManager) StartSubTask(payload engine.TaskPayload) (map[string]any,
 
 // HandleTaskCompletion is called when a Task workflow hits its END node.
 // It marks the task complete and fires the onTaskCompleted callback to resume the parent workflow.
-func (tm *TaskManager) HandleTaskCompletion(workflowID string, finalVariables map[string]any) error {
-	record, exists := tm.db.GetTaskByWorkflowID(workflowID)
+func (tm *TaskManager) HandleTaskCompletion(ctx context.Context, workflowID string, finalVariables map[string]any) error {
+	record, exists := tm.db.GetTaskByWorkflowID(ctx, workflowID)
 	if !exists {
 		// Not a workflow we own — safe to ignore.
 		return nil
@@ -220,7 +220,7 @@ func (tm *TaskManager) HandleTaskCompletion(workflowID string, finalVariables ma
 	log.Printf("[TaskManager] Task workflow %s completed for task %s", workflowID, record.TaskID)
 
 	record.State = "COMPLETED"
-	tm.db.SaveTask(record)
+	tm.db.SaveTask(ctx, record)
 
 	err := tm.onTaskCompleted(record.ParentWorkflowID, record.ParentRunID, record.ParentNodeID, finalVariables)
 	if err != nil {
@@ -235,7 +235,7 @@ func (tm *TaskManager) HandleTaskCompletion(workflowID string, finalVariables ma
 // CompleteTaskStep is the public API for external clients or portals to submit form/interaction
 // data and resume the active step in the corresponding Task workflow.
 func (tm *TaskManager) CompleteTaskStep(ctx context.Context, taskID string, payload map[string]any) error {
-	record, exists := tm.db.GetTask(taskID)
+	record, exists := tm.db.GetTask(ctx, taskID)
 	if !exists {
 		return fmt.Errorf("task %s not found", taskID)
 	}
@@ -251,7 +251,7 @@ func (tm *TaskManager) CompleteTaskStep(ctx context.Context, taskID string, payl
 	for k, v := range payload {
 		record.Data[k] = v
 	}
-	tm.db.SaveTask(record)
+	tm.db.SaveTask(ctx, record)
 
 	log.Printf("[TaskManager] Waking active activity %s in workflow %s (task %s)",
 		record.SubTaskNodeID, record.TaskWorkflowID, taskID)
@@ -272,8 +272,8 @@ func (tm *TaskManager) CompleteTaskStep(ctx context.Context, taskID string, payl
 
 // GetTaskRenderInfo retrieves a task record and dynamically decorates it with rich render metadata
 // (like JSON schemas) fetched on-the-fly from its executing plugin.
-func (tm *TaskManager) GetTaskRenderInfo(taskID string) (TaskView, error) {
-	record, exists := tm.db.GetTask(taskID)
+func (tm *TaskManager) GetTaskRenderInfo(context context.Context, taskID string) (TaskView, error) {
+	record, exists := tm.db.GetTask(context, taskID)
 	if !exists {
 		return TaskView{}, fmt.Errorf("task record %s not found", taskID)
 	}
@@ -296,11 +296,11 @@ func (tm *TaskManager) GetTaskRenderInfo(taskID string) (TaskView, error) {
 }
 
 // GetAllTasksRenderInfo retrieves all tasks in the store and decorates each of them with dynamic render info.
-func (tm *TaskManager) GetAllTasksRenderInfo() []TaskView {
-	records := tm.db.GetAllTasks()
+func (tm *TaskManager) GetAllTasksRenderInfo(context context.Context) []TaskView {
+	records := tm.db.GetAllTasks(context)
 	resList := make([]TaskView, 0, len(records))
 	for _, r := range records {
-		info, err := tm.GetTaskRenderInfo(r.TaskID)
+		info, err := tm.GetTaskRenderInfo(context, r.TaskID)
 		if err != nil {
 			slog.Info(fmt.Sprintf("failed to render task %s: %v", r.TaskID, err))
 		}

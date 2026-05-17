@@ -118,20 +118,20 @@ func newSafeMockTaskStore() *safeMockTaskStore {
 	}
 }
 
-func (s *safeMockTaskStore) SaveTask(task store.TaskRecord) {
+func (s *safeMockTaskStore) SaveTask(_ context.Context, task store.TaskRecord) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.tasks[task.TaskID] = task
 }
 
-func (s *safeMockTaskStore) GetTask(taskID string) (store.TaskRecord, bool) {
+func (s *safeMockTaskStore) GetTask(_ context.Context, taskID string) (store.TaskRecord, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	task, exists := s.tasks[taskID]
 	return task, exists
 }
 
-func (s *safeMockTaskStore) GetTaskByWorkflowID(workflowID string) (store.TaskRecord, bool) {
+func (s *safeMockTaskStore) GetTaskByWorkflowID(_ context.Context, workflowID string) (store.TaskRecord, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	for _, t := range s.tasks {
@@ -142,7 +142,7 @@ func (s *safeMockTaskStore) GetTaskByWorkflowID(workflowID string) (store.TaskRe
 	return store.TaskRecord{}, false
 }
 
-func (s *safeMockTaskStore) GetAllTasks() []store.TaskRecord {
+func (s *safeMockTaskStore) GetAllTasks(_ context.Context) []store.TaskRecord {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	out := make([]store.TaskRecord, 0, len(s.tasks))
@@ -241,7 +241,7 @@ func TestTaskManager_Lifecycle(t *testing.T) {
 		t.Error("expected task sub-workflow to be started")
 	}
 
-	tasks := storeMock.GetAllTasks()
+	tasks := storeMock.GetAllTasks(context.Background())
 	if len(tasks) != 1 {
 		t.Fatalf("expected exactly 1 task record, got %d", len(tasks))
 	}
@@ -264,7 +264,7 @@ func TestTaskManager_Lifecycle(t *testing.T) {
 		t.Fatalf("StartSubTask failed: %v", err)
 	}
 
-	task, _ = storeMock.GetTask(task.TaskID)
+	task, _ = storeMock.GetTask(context.Background(), task.TaskID)
 	if task.State != "PENDING_USER" {
 		t.Errorf("expected status 'PENDING_USER', got '%s'", task.State)
 	}
@@ -298,7 +298,7 @@ func TestTaskManager_Lifecycle(t *testing.T) {
 		t.Error("expected TaskDone to be called on task workflow")
 	}
 
-	task, _ = storeMock.GetTask(task.TaskID)
+	task, _ = storeMock.GetTask(context.Background(), task.TaskID)
 	userform, ok := task.Data["userform"].(map[string]any)
 	if !ok {
 		t.Fatal("expected 'userform' to be a nested map")
@@ -309,11 +309,11 @@ func TestTaskManager_Lifecycle(t *testing.T) {
 
 	// 4. HandleTaskCompletion
 	finalVars := map[string]any{"reviewerform.review_outcome": "approve"}
-	if err := tm.HandleTaskCompletion(task.TaskWorkflowID, finalVars); err != nil {
+	if err := tm.HandleTaskCompletion(context.Background(), task.TaskWorkflowID, finalVars); err != nil {
 		t.Fatalf("HandleTaskCompletion failed: %v", err)
 	}
 
-	task, _ = storeMock.GetTask(task.TaskID)
+	task, _ = storeMock.GetTask(context.Background(), task.TaskID)
 	if task.State != "COMPLETED" {
 		t.Errorf("expected task status 'COMPLETED', got '%s'", task.State)
 	}
@@ -374,7 +374,7 @@ func TestStartSubTask_UnknownWorkflowID(t *testing.T) {
 
 func TestStartSubTask_UnknownTaskTemplateID(t *testing.T) {
 	db := newSafeMockTaskStore()
-	db.SaveTask(store.TaskRecord{
+	db.SaveTask(context.Background(), store.TaskRecord{
 		TaskID:         "task-1",
 		TaskWorkflowID: "task-workflow-1",
 		State:          "STARTING",
@@ -394,7 +394,7 @@ func TestStartSubTask_UnknownTaskTemplateID(t *testing.T) {
 
 func TestStartSubTask_ExternalReviewPath(t *testing.T) {
 	db := newSafeMockTaskStore()
-	db.SaveTask(store.TaskRecord{
+	db.SaveTask(context.Background(), store.TaskRecord{
 		TaskID:         "task-ext",
 		TaskWorkflowID: "task-ext-workflow",
 		State:          "STARTING",
@@ -413,7 +413,7 @@ func TestStartSubTask_ExternalReviewPath(t *testing.T) {
 		t.Fatalf("StartSubTask for generic_external_review failed: %v", err)
 	}
 
-	task, _ := db.GetTask("task-ext")
+	task, _ := db.GetTask(context.Background(), "task-ext")
 	if task.State != "QUEUED_EXTERNALLY" {
 		t.Errorf("expected status QUEUED_EXTERNALLY, got %s", task.State)
 	}
@@ -434,7 +434,7 @@ func TestCompleteTaskStep_UnknownTaskID(t *testing.T) {
 
 func TestCompleteTaskStep_AlreadyCompleted(t *testing.T) {
 	db := newSafeMockTaskStore()
-	db.SaveTask(store.TaskRecord{
+	db.SaveTask(context.Background(), store.TaskRecord{
 		TaskID: "task-done",
 		State:  "COMPLETED",
 		Data:   map[string]any{},
@@ -455,7 +455,7 @@ func TestCompleteTaskStep_AlreadyCompleted(t *testing.T) {
 func TestHandleTaskCompletion_UnknownWorkflowID_ReturnsNil(t *testing.T) {
 	tm := newTestTaskManager(newSafeMockTaskStore(), newTestRegistry(), &mockTemporalManager{}, noopCallback)
 
-	err := tm.HandleTaskCompletion("unknown-workflow", map[string]any{"k": "v"})
+	err := tm.HandleTaskCompletion(context.Background(), "unknown-workflow", map[string]any{"k": "v"})
 	if err != nil {
 		t.Fatalf("expected nil for unknown workflow, got: %v", err)
 	}
@@ -463,7 +463,7 @@ func TestHandleTaskCompletion_UnknownWorkflowID_ReturnsNil(t *testing.T) {
 
 func TestHandleTaskCompletion_CallbackError_TaskStillMarkedCompleted(t *testing.T) {
 	db := newSafeMockTaskStore()
-	db.SaveTask(store.TaskRecord{
+	db.SaveTask(context.Background(), store.TaskRecord{
 		TaskID:         "task-cb-err",
 		TaskWorkflowID: "task-cb-workflow",
 		State:          "PENDING_USER",
@@ -475,12 +475,12 @@ func TestHandleTaskCompletion_CallbackError_TaskStillMarkedCompleted(t *testing.
 		func(_, _, _ string, _ map[string]any) error { return callbackErr },
 	)
 
-	err := tm.HandleTaskCompletion("task-cb-workflow", map[string]any{})
+	err := tm.HandleTaskCompletion(context.Background(), "task-cb-workflow", map[string]any{})
 	if !errors.Is(err, callbackErr) {
 		t.Fatalf("expected callback error to be propagated, got: %v", err)
 	}
 
-	task, _ := db.GetTask("task-cb-err")
+	task, _ := db.GetTask(context.Background(), "task-cb-err")
 	if task.State != "COMPLETED" {
 		t.Errorf("expected status COMPLETED even after callback error, got %s", task.State)
 	}
