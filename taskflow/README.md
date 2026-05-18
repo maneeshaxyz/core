@@ -3,177 +3,163 @@
 [![Go Reference](https://pkg.go.dev/badge/github.com/OpenNSW/nsw-task-flow.svg)](https://pkg.go.dev/github.com/OpenNSW/nsw-task-flow)
 [![Go Test](https://github.com/OpenNSW/nsw-task-flow/actions/workflows/go.yml/badge.svg)](https://github.com/OpenNSW/nsw-task-flow/actions)
 
-The **National Single Window (NSW) Task Flow Engine** is a modular, domain-driven, and highly decoupled task orchestration package backed by the [Temporal Workflow Engine](https://temporal.io). 
+A modular, domain-driven task orchestration library for Go, designed to sit between a macro business workflow engine (Temporal-based) and the micro interactive flows it activates.
 
-It is designed as a reusable Go package that developers can import to easily build National Single Window portals or any enterprise system requiring resilient, long-running macro workflows and micro interaction lifecycles.
+It separates **long-running business journeys** ("submit a phyto application") from the **interactive steps** that fulfil them ("fill this form", "wait for reviewer approval", "process payment"), giving you a clean integration boundary for portal-style applications.
 
 ---
 
-## 🏛️ Architecture & Domain Model
+## Conceptual model
 
-The engine is built on a clean, decoupled hierarchy to completely separate high-level business flows from granular user-facing interaction flows:
+The system has three layers, each with a single, focused responsibility:
 
 ```
-              [Parent Workflow]  (Macro Business Journey)
+              [Parent Workflow]     ← macro business journey
                      │
-                     ▼ (StartTask)
-              [TaskManager] ────► [Task Record Created in Database]
+                     ▼  StartTask
+              [TaskManager] ─────► [TaskRecord in DB]
                      │
-                     ▼ (StartTaskWorkflow)
-              [Task Workflow]    (Micro Interactive Journey)
+                     ▼  StartTaskWorkflow
+              [Task Workflow]       ← micro interactive journey
                      │
-                     ▼ (StartSubTask)
-              [SubTask Node]     (Dispatched dynamically via Plugin Registry)
+                     ▼  StartSubTask
+              [SubTask Node]        ← single interaction step (form, API call, payment, …)
                      │
-                     ▼ (CompleteTaskStep)
-           [Resume SubTask & Continue]
+                     ▼  CompleteTaskStep
+            [Resume & Continue]
                      │
-                     ▼ (TaskWorkflow Completed)
-           [HandleTaskCompletion]
+                     ▼  Task workflow ends
+            [HandleTaskCompletion]
                      │
-                     ▼ (Callback)
+                     ▼  onTaskCompleted callback
               [Resume Parent Workflow]
 ```
 
-### 🔑 Key Concepts
-1. **Parent Workflow (Macro Journey)**:
-   The high-level orchestrating workflow. It describes the top-level process (e.g., importing goods, getting phytosanitary approval). It has no awareness of individual UI forms or low-level review states.
-2. **Task Workflow (Micro Journey / Micro-Flow)**:
-   A self-contained sub-process representing a concrete block of work (e.g., Application Form Submission, Inspection evaluation). Tasks run as independent Temporal workflows under the hood.
-3. **Task execution Plugins (Open-Closed Principle)**:
-   Interaction steps inside the Task are processed using a pluggable strategy pattern. Each step resolves its execution rules through `plugins.Registry` using a composite key: `(TaskType, PluginName)`. This completely decouples core orchestration from individual plugin schemas (e.g. form schemas, payment endpoints).
-4. **Unified DB Record (`TaskRecord`)**:
-   Correlates the parent coordinate IDs, active task execution coordinates, form configuration IDs, and the namespaced payload data into a single, transactional record.
+- **Parent Workflow** — the macro business process. Has no knowledge of forms, payments, or external systems.
+- **Task** — a self-contained micro-flow (its own Temporal workflow) that fulfils one parent step.
+- **SubTask** — an individual node inside a Task workflow, executed by a registered **plugin** (`USER_INPUT`, `PAYMENT`, `EXTERNAL_REVIEW`, `FIRE_AND_FORGET`, or your own).
+
+See [`docs/architecture.md`](docs/architecture.md) for the deep dive: lifecycle, state machine, sequence diagrams, and `TaskRecord` semantics.
 
 ---
 
-## 📦 Project Structure
+## Public API at a glance
 
-```bash
-├── orchestrator/          # Core task orchestration engine (public package)
-│   ├── manager.go         # TaskManager - starts tasks, manages sub-tasks, completes steps
-│   ├── manager_test.go    # Comprehensive unit and lifecycle test coverage
-│   └── registry.go        # Registry of task template definitions (schemas, task types)
-├── plugins/               # Pluggable step-execution handlers (public package)
-│   ├── plugin.go          # Registry definition and task execution interfaces
-│   ├── user_input.go      # generic_user_input plugin: decodes user form ID from config properties
-│   └── external_review.go # generic_external_review plugin: dispatches review states to external systems
-├── store/                 # Storage abstraction & domain models (public package)
-│   ├── db.go              # TaskStore interface and TaskRecord struct
-│   └── db_test.go         # Store verification test suite
-├── demo/                  # Self-contained executable demo (developer playground)
-│   ├── main.go            # Wire-up, Temporal configuration, and worker boots
-│   ├── server.go          # HTTP API server routing to TaskManager
-│   ├── db.go              # Simple file-backed, in-memory implementation of TaskStore
-│   ├── task.json          # Micro-flow workflow definition (User Form -> External Review)
-│   ├── workflow.json      # Macro-flow workflow definition
-│   ├── templates/         # JSON Step Config files (generic_user_input, generic_external_review)
-│   └── static/            # Demo web UI (split-panel portal view & forms)
-```
+The `TaskManager` exposes four methods that span the integration surface:
+
+| Method                                   | Called by                       | Purpose                                                           |
+|------------------------------------------|---------------------------------|-------------------------------------------------------------------|
+| `StartTask(payload)`                     | Parent workflow engine callback | Create a new task and start its child workflow                    |
+| `GetAllTasks(ctx, parentWorkflowID)`     | Portal / UI                     | List tasks (lightweight summary; optional parent-workflow filter) |
+| `GetTaskRenderInfo(ctx, taskID)`         | Portal / UI                     | Fetch a single task with its fully rendered view                  |
+| `CompleteTaskStep(ctx, taskID, payload)` | Portal / UI                     | Submit interaction data and resume the active subtask             |
+
+There are also two internal hooks invoked by the task workflow itself: `StartSubTask` (a workflow node activates) and `HandleTaskCompletion` (the task workflow finishes).
+
+### Key invariants
+
+- **`TaskID` is the parent workflow's `NodeID`.** No internal UUIDs — the task is addressable by an identifier the caller already knows.
+- **No parallel subtasks.** A `TaskRecord` stores coordinates for one active subtask. Task workflows must be sequential.
+- **`StartTask` returns `activity.ErrResultPending`** on the happy path. The task workflow runs asynchronously; the parent activity stays suspended until `onTaskCompleted` fires.
+- **Plugins suspend by returning `plugins.ErrSuspended`.** Synchronous plugins return `nil`; the workflow proceeds without parking.
 
 ---
 
-## 🚀 Getting Started with the Demo
-
-The repository includes a ready-to-use developer demo showcasing the **Split-Panel Portal View**. It simulates an applicant filling out a phytosanitary certificate application on the left, and a reviewer approving/rejecting it on the right in real time.
-
-### Prerequisites
-- [Go](https://golang.org/doc/install) 1.20+
-- [Temporal CLI](https://docs.temporal.io/cli/) (local development server)
-
-### 1. Run the Local Temporal Server
-Open a new terminal window and run:
-```bash
-temporal server start-dev
-```
-*This starts a local development cluster. You can view the Temporal Web UI at [http://localhost:8233](http://localhost:8233).*
-
-### 2. Run the Demo Server
-In a separate terminal window, start the demo:
-```bash
-go run ./demo
-```
-This command:
-1. Registers the Task Templates from `./demo/templates/`.
-2. Registers default task capability plugins (Human Form Submission, External Agency Dispatch) scoped to the `"APPLICATION"` task category.
-3. Boots the Parent and Task Temporal workers.
-4. Spins up a web server on [http://localhost:8080](http://localhost:8080).
-
-> [!NOTE]
-> The demo registers a **local mock dispatcher** for the external agency step. It prints a formatted message to console instead of sending network requests, ensuring the reviewer dashboard runs flawlessly with zero ports setup!
-
-### 3. Open the Demo UI
-Go to [http://localhost:8080](http://localhost:8080) in your web browser. 
-- Click **"Start Workflow"** to kick off the Macro Journey.
-- Experience the real-time split-screen interaction (Form submission ➡️ Reviewer evaluation ➡️ Parent Completion)!
-
----
-
-## 🛠️ Usage as a Go Package
-
-Import the packages to incorporate the Task Flow engine into your own projects:
+## Quick start: wire it up
 
 ```go
 import (
-	"context"
-	
-	"github.com/OpenNSW/nsw-task-flow/orchestrator"
-	"github.com/OpenNSW/nsw-task-flow/plugins"
-	"github.com/OpenNSW/nsw-task-flow/store"
-	engine "github.com/OpenNSW/go-temporal-workflow"
+    "context"
+
+    engine "github.com/OpenNSW/go-temporal-workflow"
+    "github.com/OpenNSW/nsw-task-flow/orchestrator"
+    "github.com/OpenNSW/nsw-task-flow/plugins"
+    "github.com/OpenNSW/nsw-task-flow/renderer"
+    "github.com/OpenNSW/nsw-task-flow/store"
 )
 
-// 1. Initialize your Database Store
-var db store.TaskStore = myDBImpl
+// 1. Bring your own implementations of TaskStore, TaskTemplateRegistry, and Renderer.
+var db store.TaskStore               = myStore
+var registry orchestrator.TaskTemplateRegistry = myRegistry
+var rdr renderer.Renderer            = mySimpleRenderer
 
-// 2. Define a Task Templates Registry
-registry := orchestrator.NewTaskTemplateRegistry()
-registry.Register(orchestrator.TaskTemplateEntry{
-	TemplateID:       "phyto_user_submission",
-	TaskType:         "APPLICATION",
-	WorkflowID:       "phyto_task_v1",
-	PluginName:       "generic_user_input",
-	PluginProperties: []byte(`{"user_jsonforms_id": "phyto_user_form_v1"}`),
-})
+// 2. Register the plugins you need.
+pluginsReg := plugins.NewRegistry()
+pluginsReg.Register("USER_INPUT", plugins.NewUserInputPlugin())
+pluginsReg.Register("FIRE_AND_FORGET", plugins.NewAPICallPlugin(nil))
 
-// 3. Initialize and Register Strategy Plugins
-pluginsRegistry := plugins.NewRegistry()
-pluginsRegistry.Register("APPLICATION", plugins.NewUserInputPlugin())
-pluginsRegistry.Register("APPLICATION", plugins.NewExternalReviewPlugin(nil))
-
-// 4. Define the Callback to Wake up the Parent Workflow
-onTaskCompleted := func(parentWorkflowID string, parentRunID string, parentNodeID string, finalVariables map[string]any) error {
-	return parentWorkflowManager.TaskDone(context.Background(), parentWorkflowID, parentRunID, parentNodeID, finalVariables)
+// 3. Callback that wakes the parent workflow when a task completes.
+onTaskCompleted := func(parentWorkflowID, parentRunID, parentNodeID string, vars map[string]any) error {
+    return parentWorkflowManager.TaskDone(context.Background(), parentWorkflowID, parentRunID, parentNodeID, vars)
 }
 
-// 5. Initialize the TaskManager
-tm := orchestrator.NewTaskManager(db, registry, pluginsRegistry, taskWorkflowManager, onTaskCompleted).
-	WithTaskDefPath("path/to/task.json")
+// 4. Build the manager.
+tm := orchestrator.NewTaskManager(db, registry, pluginsReg, taskWorkflowManager, onTaskCompleted, rdr)
 
-// 6. Connect TaskManager in your Temporal handlers
-// When parent workflow triggers a task node:
-parentTaskHandler := func(payload engine.TaskPayload) error {
-	return tm.StartTask(payload)
+// 5. Hook it into your Temporal handlers.
+parentTaskHandler := func(p engine.TaskPayload) (map[string]any, error) { return tm.StartTask(p) }
+taskHandler       := func(p engine.TaskPayload) (map[string]any, error) { return tm.StartSubTask(p) }
+taskCompletionHandler := func(wfID string, vars map[string]any) error {
+    return tm.HandleTaskCompletion(context.Background(), wfID, vars)
 }
+```
 
-// When the task workflow registers interaction nodes (e.g. generic_user_input):
-taskHandler := func(payload engine.TaskPayload) error {
-	return tm.StartSubTask(payload)
-}
+`demo/main.go` is a working reference implementation of every dependency above.
 
-// When the task workflow completes:
-taskCompletionHandler := func(workflowID string, finalVariables map[string]any) error {
-	return tm.HandleTaskCompletion(workflowID, finalVariables)
-}
+---
+
+## Where to go next
+
+| Audience                                                                | Read                                                         |
+|-------------------------------------------------------------------------|--------------------------------------------------------------|
+| **Backend service** embedding the orchestrator                          | [`docs/integration-guide.md`](docs/integration-guide.md)     |
+| **Frontend / portal** consuming the HTTP API                            | [`docs/frontend-guide.md`](docs/frontend-guide.md)           |
+| **Plugin author** writing a new subtask handler                         | [`docs/plugin-author-guide.md`](docs/plugin-author-guide.md) |
+| **Template author** defining tasks, subtasks, workflows, render configs | [`docs/template-reference.md`](docs/template-reference.md)   |
+| **Anyone** wanting the conceptual model                                 | [`docs/architecture.md`](docs/architecture.md)               |
+
+---
+
+## Running the demo
+
+The repository ships a self-contained demo that exercises the full stack (Parent Workflow → Task → User Input → External Review → Payment → Completion).
+
+**Prerequisites**
+
+- Go 1.20+
+- [Temporal CLI](https://docs.temporal.io/cli/) for a local dev server
+
+**Run**
+
+```bash
+# Terminal 1 — Temporal dev server
+temporal server start-dev
+
+# Terminal 2 — the demo
+go run ./demo
+```
+
+Open <http://localhost:8080> and click **Start Workflow**. The split-pane UI shows the applicant on the left and the reviewer on the right, both driven by the same `TaskManager` instance.
+
+---
+
+## Project layout
+
+```
+orchestrator/     # TaskManager, TaskTemplateRegistry, TaskView
+plugins/          # Plugin interface, Registry, built-in plugins
+renderer/         # Renderer interface, RenderResult, UIComponent
+store/            # TaskStore interface, TaskRecord
+demo/             # Reference implementation: HTTP server, file-backed store, JSON templates
+docs/             # Integration / frontend / plugin / template / architecture guides
 ```
 
 ---
 
-## 🧪 Running Unit Tests
+## Testing
 
-The core packages are backed by an extensive unit and integration test suite asserting database state transitions, callback invocation, intermediate state mutations, and type checks.
-
-To execute tests with race-detection, run:
 ```bash
-go test -v -race ./...
+go test -race ./...
 ```
+
+The core packages have integration coverage for state transitions, callback invocation, plugin suspension semantics, and the render pipeline.
