@@ -274,7 +274,7 @@ func (tm *TaskManager) CompleteTaskStep(ctx context.Context, taskID string, payl
 		record.TaskWorkflowID,
 		record.TaskRunID,
 		record.SubTaskNodeID,
-		map[string]any{record.ActiveOutputNamespace: payload}, // pass full namespaced state back to the workflow
+		payload, // pass full namespaced state back to the workflow
 	)
 	if err != nil {
 		return fmt.Errorf("failed to resume task workflow: %w", err)
