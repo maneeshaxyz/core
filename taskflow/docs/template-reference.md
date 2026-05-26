@@ -190,7 +190,7 @@ The `Type` strings (`"markdown"`, `"jsonforms"`, …) are conventions between yo
 - **Conditional slots.** A `sidebar` slot only when the user is a reviewer.
 - **Schema lookups.** A `jsonforms` payload may reference a separate JSON Schema file, fetched by the renderer at render time.
 
-The interface (`Renderer.Render(context.Context, json.RawMessage, Facts) (RenderResult, error)`) is deliberately open — write whatever fits your UI.
+The interface (`Renderer.Render(context.Context, json.RawMessage, Facts) (json.RawMessage, error)`) is deliberately open — write whatever fits your UI.
 
 ### Snapshot semantics
 

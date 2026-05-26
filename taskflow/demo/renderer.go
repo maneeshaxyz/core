@@ -21,9 +21,9 @@ import (
 //	}
 type SimpleRenderer struct{}
 
-func (SimpleRenderer) Render(_ context.Context, config json.RawMessage, facts renderer.Facts) (renderer.RenderResult, error) {
+func (SimpleRenderer) Render(_ context.Context, config json.RawMessage, facts renderer.Facts) (json.RawMessage, error) {
 	if len(config) == 0 {
-		return renderer.RenderResult{}, nil
+		return nil, nil
 	}
 
 	// First pass: keep each top-level value as a raw message so that
@@ -39,12 +39,12 @@ func (SimpleRenderer) Render(_ context.Context, config json.RawMessage, facts re
 		raw, ok = byKey["default"]
 	}
 	if !ok {
-		return renderer.RenderResult{}, nil
+		return nil, nil
 	}
 
-	var result renderer.RenderResult
+	var result RenderResult
 	if err := json.Unmarshal(raw, &result); err != nil {
 		return nil, fmt.Errorf("parse render config entry %q: %w", facts.State, err)
 	}
-	return result, nil
+	return json.Marshal(result)
 }

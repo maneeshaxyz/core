@@ -192,11 +192,11 @@ If you return an error, the orchestrator logs it and the parent workflow stays p
 
 ```go
 type Renderer interface {
-    Render(ctx context.Context, config json.RawMessage, facts Facts) (RenderResult, error)
+    Render(ctx context.Context, config json.RawMessage, facts Facts) (json.RawMessage, error)
 }
 ```
 
-The renderer turns a snapshotted render config + the task's current `(state, data)` into a `RenderResult` (a map of UI slot → component). The library is deliberately agnostic about what your config looks like — `Render` receives raw JSON and decides what to do.
+The renderer turns a snapshotted render config + the task's current `(state, data)` into a `json.RawMessage` (e.g. a map of UI slot → component, a custom layout config, or schema). The library is deliberately agnostic about what your config or UI representation looks like — `Render` receives raw JSON and decides what to do.
 
 `demo/renderer.go` is a minimal state-keyed renderer: the config is `{state: {slot: component}}` and it picks the entry matching the current `State` (falling back to a `default` entry). Most real consumers will want something richer — templated payloads, schema lookups, role-based slot selection.
 

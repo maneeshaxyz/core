@@ -74,7 +74,11 @@ The `view` key is omitted (the JSON tag is `omitempty`). Listing is intentionall
 }
 ```
 
-### `RenderResult`
+### `View` JSON structure
+
+The `view` field returned in the API is a raw JSON payload (`json.RawMessage`). The core orchestrator does not enforce any specific schema, allowing you to use whatever layout paradigm fits your frontend.
+
+However, the standard demo implementation (`SimpleRenderer`) uses a **Slot/Component** layout convention:
 
 ```go
 type RenderResult map[string]UIComponent
@@ -85,9 +89,10 @@ type UIComponent struct {
 }
 ```
 
-A `RenderResult` is a map from **slot name** (e.g. `"primary"`, `"sidebar"`, `"action_panel"`) to component spec. The slot names and component types are conventions in your render config — not enforced by the library — so they're whatever you and your renderer agree on.
-
-The frontend's job is roughly: for each slot, look up which component renderer to use based on `type`, and pass it `payload`.
+In this convention, `view` is a map from **slot name** (e.g. `"primary"`, `"sidebar"`, `"action_panel"`) to a component spec. The frontend's job is to:
+1. Parse the raw `view` JSON.
+2. For each slot, look up the appropriate UI widget to display based on its `type`.
+3. Render the widget using the corresponding `payload`.
 
 ---
 

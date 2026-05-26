@@ -77,9 +77,13 @@ func TestSimpleRenderer_StateKeyedConfig(t *testing.T) {
 	r := SimpleRenderer{}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			out, err := r.Render(context.Background(), cfg, renderer.Facts{State: tc.state})
+			rawOut, err := r.Render(context.Background(), cfg, renderer.Facts{State: tc.state})
 			if err != nil {
 				t.Fatalf("render: %v", err)
+			}
+			var out RenderResult
+			if err := json.Unmarshal(rawOut, &out); err != nil {
+				t.Fatalf("unmarshal RenderResult: %v", err)
 			}
 			got, ok := out["primary"]
 			if !ok {
@@ -100,23 +104,23 @@ func TestSimpleRenderer_StateKeyedConfig(t *testing.T) {
 }
 
 func TestSimpleRenderer_EmptyConfig(t *testing.T) {
-	out, err := SimpleRenderer{}.Render(context.Background(), nil, renderer.Facts{State: "ANY"})
+	rawOut, err := SimpleRenderer{}.Render(context.Background(), nil, renderer.Facts{State: "ANY"})
 	if err != nil {
 		t.Fatalf("render: %v", err)
 	}
-	if len(out) != 0 {
-		t.Errorf("expected empty result, got %v", out)
+	if len(rawOut) != 0 {
+		t.Errorf("expected empty result, got %s", rawOut)
 	}
 }
 
 func TestSimpleRenderer_NoMatchAndNoDefault(t *testing.T) {
 	cfg := json.RawMessage(`{"OTHER": {"primary": {"type": "markdown", "payload": "x"}}}`)
-	out, err := SimpleRenderer{}.Render(context.Background(), cfg, renderer.Facts{State: "NOT_PRESENT"})
+	rawOut, err := SimpleRenderer{}.Render(context.Background(), cfg, renderer.Facts{State: "NOT_PRESENT"})
 	if err != nil {
 		t.Fatalf("render: %v", err)
 	}
-	if len(out) != 0 {
-		t.Errorf("expected empty result with no default, got %v", out)
+	if len(rawOut) != 0 {
+		t.Errorf("expected empty result with no default, got %s", rawOut)
 	}
 }
 
@@ -216,9 +220,14 @@ func TestPipeline_EndToEnd_TaskRender(t *testing.T) {
 		t.Fatalf("GetTaskRenderInfo: %v", err)
 	}
 
-	comp, ok := v.View["primary"]
+	var view RenderResult
+	if err := json.Unmarshal(v.View, &view); err != nil {
+		t.Fatalf("unmarshal view: %v", err)
+	}
+
+	comp, ok := view["primary"]
 	if !ok {
-		t.Fatalf("missing slot 'primary' in rendered view: %v", v.View)
+		t.Fatalf("missing slot 'primary' in rendered view: %s", v.View)
 	}
 	if comp.Type != "markdown" {
 		t.Errorf("component type: want markdown, got %s", comp.Type)
