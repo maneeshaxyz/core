@@ -69,7 +69,7 @@ func (h *HTTPHandler) HandleWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = h.service.ProcessWebhook(r.Context(), gatewayID, body, r.Header)
+	resp, err := h.service.ProcessWebhook(r.Context(), gatewayID, body, r.Header)
 	if err != nil {
 		// An unknown reference is permanent; respond 404 so the gateway stops
 		// retrying instead of hammering us forever. Everything else is treated
@@ -97,6 +97,15 @@ func (h *HTTPHandler) HandleWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte(`{"status": "accepted"}`))
+	if resp == nil {
+		slog.ErrorContext(r.Context(), "webhook response is nil", "gateway", gatewayID)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(resp.HTTPStatus)
+	if _, err := w.Write(resp.Payload); err != nil {
+		slog.ErrorContext(r.Context(), "failed to write webhook response", "error", err)
+	}
 }
