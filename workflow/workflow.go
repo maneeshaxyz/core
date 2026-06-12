@@ -344,18 +344,23 @@ func (g *graphInterpreter) handleGatewayNode(ctx workflow.Context, nodeInfo *Nod
 		return nil
 
 	case GatewayTypeExclusiveJoin:
+		consumed := false
 		for _, e := range inEdges {
 			if g.edgeTokens[e.ID] > 0 {
 				g.edgeTokens[e.ID]--
+				consumed = true
 				break
 			}
 		}
-		if len(outEdges) > 0 {
-			nodeInfo.Status = NodeStatusCompleted
-			nodeInfo.UpdatedAt = workflow.Now(ctx)
-			return g.transitionTo(ctx, outEdges[0])
+		if !consumed {
+			return fmt.Errorf("exclusive join %s reached with no incoming token — invalid workflow definition", node.ID)
 		}
-		return nil
+		if len(outEdges) != 1 {
+			return fmt.Errorf("exclusive join %s must have exactly one outgoing edge, got %d — invalid workflow definition", node.ID, len(outEdges))
+		}
+		nodeInfo.Status = NodeStatusCompleted
+		nodeInfo.UpdatedAt = workflow.Now(ctx)
+		return g.transitionTo(ctx, outEdges[0])
 	default:
 		return fmt.Errorf("unknown gateway type: %v", node.GatewayType)
 	}
